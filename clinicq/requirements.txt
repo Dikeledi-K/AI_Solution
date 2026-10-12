@@ -1,0 +1,12 @@
+# Core app (enough for mock mode)
+streamlit>=1.50
+pydantic>=2.7
+python-dotenv>=1.0
+pytest>=8.0
+
+# Claude provider (LLM_PROVIDER=anthropic)
+anthropic>=1.13.0
+
+# Optional free-tier providers – uncomment the one you want, then pip install -r requirements.txt
+# google-genai>=1.0      # LLM_PROVIDER=gemini
+# groq>=0.11             # LLM_PROVIDER=groq
