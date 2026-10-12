@@ -1,0 +1,233 @@
+[
+  {
+    "minutes_ago": 270,
+    "expected_min_urgency": "GREEN",
+    "note": "Routine – repeat medication (English). Arrived 4.5 h ago, so past the GREEN target and moved up to queue with YELLOW",
+    "intake": {
+      "first_name": "Busi",
+      "age": 39,
+      "sex": "Female",
+      "pregnant": "No",
+      "chronic_conditions": [
+        "diabetes"
+      ],
+      "phone": "0821234567",
+      "symptoms_text": "I came to collect my repeat medication for diabetes. I feel fine, no problems.",
+      "surname": "Mokoena",
+      "id_type": "Passport",
+      "id_number": "DEMO10001",
+      "address": "12 Vilakazi St, Orlando West",
+      "nok_name": "Thandi Mokoena",
+      "nok_relationship": "Mother",
+      "nok_phone": "0821110001",
+      "consent": true
+    }
+  },
+  {
+    "minutes_ago": 48,
+    "expected_min_urgency": "GREEN",
+    "note": "Routine – repeat blood pressure script (Afrikaans)",
+    "intake": {
+      "first_name": "Annatjie",
+      "age": 71,
+      "sex": "Female",
+      "pregnant": "N/A",
+      "chronic_conditions": [
+        "hypertension"
+      ],
+      "phone": "0839876543",
+      "symptoms_text": "Ek kom net vir my herhaalvoorskrif vir my bloeddruk pille. Ek voel goed.",
+      "surname": "van Wyk",
+      "id_type": "No document",
+      "id_number": null,
+      "address": "4 Kerk St, Bosmont",
+      "nok_name": "Johan van Wyk",
+      "nok_relationship": "Son",
+      "nok_phone": "0831110002",
+      "consent": true
+    }
+  },
+  {
+    "minutes_ago": 45,
+    "expected_min_urgency": "YELLOW",
+    "note": "Cough, night sweats, weight loss (isiZulu) – no rule fires, the AI decides",
+    "intake": {
+      "first_name": "Sipho",
+      "age": 45,
+      "sex": "Male",
+      "pregnant": "N/A",
+      "chronic_conditions": [
+        "HIV"
+      ],
+      "phone": "0715551234",
+      "symptoms_text": "Ngikhwehlela izinsuku eziyishumi, ngijuluka ebusuku futhi isisindo sehlile.",
+      "surname": "Ndlovu",
+      "id_type": "Passport",
+      "id_number": "DEMO10003",
+      "address": "88 Mooki St, Zola",
+      "nok_name": "Lindiwe Ndlovu",
+      "nok_relationship": "Wife",
+      "nok_phone": "0711110003",
+      "consent": true
+    }
+  },
+  {
+    "minutes_ago": 40,
+    "expected_min_urgency": "GREEN",
+    "note": "Mild cold (English)",
+    "intake": {
+      "first_name": "Jason",
+      "age": 22,
+      "sex": "Male",
+      "pregnant": "N/A",
+      "chronic_conditions": [],
+      "phone": "0601112233",
+      "symptoms_text": "I have a runny nose and a mild sore throat for 3 days. I can still eat and drink fine.",
+      "surname": "Pillay",
+      "id_type": "No document",
+      "id_number": null,
+      "address": "21 Gemsbok Ave, Lenasia",
+      "nok_name": "Priya Pillay",
+      "nok_relationship": "Sister",
+      "nok_phone": "0601110004",
+      "consent": true
+    }
+  },
+  {
+    "minutes_ago": 33,
+    "expected_min_urgency": "GREEN",
+    "note": "Headache and flu (Sesotho)",
+    "intake": {
+      "first_name": "Palesa",
+      "age": 30,
+      "sex": "Female",
+      "pregnant": "No",
+      "chronic_conditions": [],
+      "phone": null,
+      "symptoms_text": "Ke na le hlooho e bohloko le mokgohlane ka matsatsi a mararo.",
+      "surname": "Molefe",
+      "id_type": "Asylum/refugee permit",
+      "id_number": "DEMO-A-10005",
+      "address": "7 Moshoeshoe St, Meadowlands",
+      "nok_name": "Kabelo Molefe",
+      "nok_relationship": "Brother",
+      "nok_phone": "0791110005",
+      "consent": true
+    }
+  },
+  {
+    "minutes_ago": 25,
+    "expected_min_urgency": "ORANGE",
+    "note": "Boiling-water burn (Afrikaans) – burns rule raises to ORANGE",
+    "intake": {
+      "first_name": "Pieter",
+      "age": 34,
+      "sex": "Male",
+      "pregnant": "N/A",
+      "chronic_conditions": [],
+      "phone": "0827778888",
+      "symptoms_text": "Ek het my hand met 'n kookwater gebrand, dit is baie seer en daar is blase.",
+      "surname": "Botha",
+      "id_type": "Passport",
+      "id_number": "DEMO10006",
+      "address": "15 Main Rd, Florida",
+      "nok_name": "Elsa Botha",
+      "nok_relationship": "Wife",
+      "nok_phone": "0821110006",
+      "consent": true
+    }
+  },
+  {
+    "minutes_ago": 18,
+    "expected_min_urgency": "RED",
+    "note": "Child danger sign: high fever, not drinking, very sleepy (Sesotho, mother speaking)",
+    "intake": {
+      "first_name": "Kgosi",
+      "age": 2,
+      "sex": "Male",
+      "pregnant": "N/A",
+      "chronic_conditions": [],
+      "phone": "0794443322",
+      "symptoms_text": "Ngwana o na le feberu e phahameng ka matsatsi a mabedi, ha a nwe letho mme o robetse haholo.",
+      "surname": "Sithole",
+      "id_type": "No document",
+      "id_number": null,
+      "address": "3 Phiri Ext, Soweto",
+      "nok_name": "Naledi Sithole",
+      "nok_relationship": "Mother",
+      "nok_phone": "0791110007",
+      "consent": true
+    }
+  },
+  {
+    "minutes_ago": 12,
+    "expected_min_urgency": "RED",
+    "note": "Chest pain + difficulty breathing (isiZulu) – rules catch what the mock AI under-rates",
+    "intake": {
+      "first_name": "Zanele",
+      "age": 63,
+      "sex": "Female",
+      "pregnant": "N/A",
+      "chronic_conditions": [
+        "hypertension"
+      ],
+      "phone": "0836665544",
+      "symptoms_text": "Isifuba sibuhlungu futhi ngiphefumula kanzima kusukela izolo.",
+      "surname": "Dube",
+      "id_type": "Passport",
+      "id_number": "DEMO10008",
+      "address": "56 Koma Rd, Jabavu",
+      "nok_name": "Musa Dube",
+      "nok_relationship": "Son",
+      "nok_phone": "0831110008",
+      "consent": true
+    }
+  },
+  {
+    "minutes_ago": 8,
+    "expected_min_urgency": "RED",
+    "note": "Pregnancy danger sign: bleeding, pain, reduced movement (English)",
+    "intake": {
+      "first_name": "Nomsa",
+      "age": 27,
+      "sex": "Female",
+      "pregnant": "Yes",
+      "chronic_conditions": [],
+      "phone": "0723334455",
+      "symptoms_text": "I am 7 months pregnant and since last night I am bleeding and have bad pain in my stomach. Baby is moving less.",
+      "surname": "Khumalo",
+      "id_type": "No document",
+      "id_number": null,
+      "address": "9 Chris Hani Rd, Diepkloof",
+      "nok_name": "Bongani Khumalo",
+      "nok_relationship": "Husband",
+      "nok_phone": "0721110009",
+      "consent": true
+    }
+  },
+  {
+    "minutes_ago": 3,
+    "expected_min_urgency": "RED",
+    "note": "Chest pain (English)",
+    "intake": {
+      "first_name": "Thabo",
+      "age": 58,
+      "sex": "Male",
+      "pregnant": "N/A",
+      "chronic_conditions": [
+        "hypertension",
+        "diabetes"
+      ],
+      "phone": "0845556677",
+      "symptoms_text": "I have had a crushing chest pain since this morning, it goes to my left arm and I am sweating a lot.",
+      "surname": "Mahlangu",
+      "id_type": "Passport",
+      "id_number": "DEMO10010",
+      "address": "41 Klipspruit Valley Rd",
+      "nok_name": "Grace Mahlangu",
+      "nok_relationship": "Wife",
+      "nok_phone": "0841110010",
+      "consent": true
+    }
+  }
+]
