@@ -1,0 +1,11 @@
+{
+  "_comment": "Who ClinicQ alerts for referrals and deaths. These are PLACEHOLDER numbers – replace them with the clinic's real contacts. In this prototype messages are only simulated (written to data/sms_outbox.log).",
+  "ambulance_coordinator": {"name": "Ambulance coordinator", "phone": "0000000001"},
+  "facility_manager": {"name": "Facility manager", "phone": "0000000002"},
+  "hospitals": [
+    {"name": "District Hospital (example)", "phone": "0000000010"},
+    {"name": "Regional Hospital (example)", "phone": "0000000011"},
+    {"name": "Maternity Unit (example)", "phone": "0000000012"}
+  ],
+  "emergency_services": "10177"
+}
