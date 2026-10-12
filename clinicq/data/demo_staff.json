@@ -1,0 +1,113 @@
+{
+  "_comment": "DEMO ACCOUNTS ONLY. These PINs are public (they are in the README). Never load demo staff on a real clinic system – create real accounts on the Staff page instead.",
+  "staff": [
+    {
+      "staff_id": "N1001",
+      "full_name": "Sr Dlamini",
+      "role": "Nurse",
+      "pin": "4826"
+    },
+    {
+      "staff_id": "N1002",
+      "full_name": "Sr Mokoena",
+      "role": "Nurse",
+      "pin": "5937"
+    },
+    {
+      "staff_id": "N1003",
+      "full_name": "Sr Khumalo",
+      "role": "Nurse",
+      "pin": "6148"
+    },
+    {
+      "staff_id": "N1004",
+      "full_name": "Sr van Wyk",
+      "role": "Nurse",
+      "pin": "7259"
+    },
+    {
+      "staff_id": "N1005",
+      "full_name": "Sr Pillay",
+      "role": "Nurse",
+      "pin": "8360"
+    },
+    {
+      "staff_id": "D2001",
+      "full_name": "Dr Naidoo",
+      "role": "Doctor",
+      "pin": "7391"
+    },
+    {
+      "staff_id": "D2002",
+      "full_name": "Dr Mthembu",
+      "role": "Doctor",
+      "pin": "2947"
+    },
+    {
+      "staff_id": "P3001",
+      "full_name": "Pharmacist Botha",
+      "role": "Pharmacist",
+      "pin": "5173"
+    },
+    {
+      "staff_id": "P3002",
+      "full_name": "Pharmacist Molefe",
+      "role": "Pharmacist",
+      "pin": "3816"
+    },
+    {
+      "staff_id": "P3003",
+      "full_name": "Pharmacist Nkosi",
+      "role": "Pharmacist",
+      "pin": "4729"
+    },
+    {
+      "staff_id": "P3004",
+      "full_name": "Pharmacist Govender",
+      "role": "Pharmacist",
+      "pin": "6152"
+    },
+    {
+      "staff_id": "C4001",
+      "full_name": "Counsellor Zulu",
+      "role": "HIV counsellor",
+      "pin": "6284"
+    },
+    {
+      "staff_id": "C4002",
+      "full_name": "Counsellor Ndlovu",
+      "role": "HIV counsellor",
+      "pin": "9153"
+    },
+    {
+      "staff_id": "A5001",
+      "full_name": "Coordinator Sibiya",
+      "role": "Ambulance coordinator",
+      "pin": "3917"
+    },
+    {
+      "staff_id": "A5002",
+      "full_name": "Coordinator Mabuza",
+      "role": "Ambulance coordinator",
+      "pin": "2783"
+    },
+    {
+      "staff_id": "A5003",
+      "full_name": "Coordinator Daniels",
+      "role": "Ambulance coordinator",
+      "pin": "8516"
+    },
+    {
+      "staff_id": "M6001",
+      "full_name": "Manager Mahlaba",
+      "role": "Facility manager",
+      "pin": "8462"
+    },
+    {
+      "staff_id": "ADMIN",
+      "full_name": "Clinic Admin",
+      "role": "Admin",
+      "pin": "9045"
+    }
+  ]
+}
