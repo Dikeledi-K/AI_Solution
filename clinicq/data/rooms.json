@@ -1,0 +1,19 @@
+{
+  "_comment": "The clinic's rooms. Staff can only choose a room listed here, for a station listed under 'stations', and only while nobody else is using it. Edit this file to match your clinic's floor plan.",
+  "rooms": [
+    {"name": "Vitals Room 1",           "type": "Vitals",       "stations": ["VITALS"]},
+    {"name": "Vitals Room 2",           "type": "Vitals",       "stations": ["VITALS"]},
+    {"name": "Consultation Room 1",     "type": "Consultation", "stations": ["CLINICIAN"]},
+    {"name": "Consultation Room 2",     "type": "Consultation", "stations": ["CLINICIAN"]},
+    {"name": "Consultation Room 3",     "type": "Consultation", "stations": ["CLINICIAN"]},
+    {"name": "Consultation Room 4",     "type": "Consultation", "stations": ["CLINICIAN"]},
+    {"name": "Emergency Room 1 (Resus)", "type": "Emergency",   "stations": ["CLINICIAN", "VITALS"]},
+    {"name": "Emergency Room 2",        "type": "Emergency",    "stations": ["CLINICIAN", "VITALS"]},
+    {"name": "Pharmacy Counter 1",      "type": "Pharmacy",     "stations": ["PHARMACY"]},
+    {"name": "Pharmacy Counter 2",      "type": "Pharmacy",     "stations": ["PHARMACY"]},
+    {"name": "Injection Room",          "type": "Injection",    "stations": ["INJECTION"]},
+    {"name": "HIV Counselling Room 1",  "type": "HIV testing",  "stations": ["HIV_TEST"]},
+    {"name": "HIV Counselling Room 2",  "type": "HIV testing",  "stations": ["HIV_TEST"]},
+    {"name": "HIV Counselling Room 3",  "type": "HIV testing",  "stations": ["HIV_TEST"]}
+  ]
+}
