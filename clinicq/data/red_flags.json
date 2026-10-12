@@ -1,0 +1,207 @@
+{
+  "_comment": "ClinicQ red-flag rules. Edit this file to add or change danger-sign phrases. Rules can only RAISE urgency (to ORANGE or RED), never lower it. Phrases are matched case-insensitively at the start of a word, so 'bleed' also matches 'bleeding'. Languages: en=English, zu=isiZulu, st=Sesotho, af=Afrikaans, nso=Sepedi (Northern Sotho). IMPORTANT: non-English phrase lists are a starting point and MUST be reviewed by native-speaking clinic staff before real use.",
+  "version": 1,
+  "pregnancy_context_phrases": {
+    "en": ["pregnant", "pregnancy", "expecting a baby"],
+    "zu": ["ngikhulelwe", "ukhulelwe", "ukukhulelwa"],
+    "st": ["ke imile", "o imile", "boimana", "ke ithwele"],
+    "af": ["swanger", "verwagtend"],
+    "nso": ["ke imile", "o imile", "ke ithwele", "boimana"]
+  },
+  "rules": [
+    {
+      "id": "chest_pain",
+      "name": "Chest pain",
+      "urgency": "RED",
+      "phrases": {
+        "en": ["chest pain", "pain in my chest", "chest is tight", "tight chest", "pressure in my chest", "chest hurts", "sore chest", "chest is sore", "heart attack"],
+        "zu": ["ubuhlungu esifubeni", "buhlungu esifubeni", "isifuba sibuhlungu", "isifuba siyaqina", "kuqina isifuba"],
+        "st": ["bohloko sefubeng", "sefuba se bohloko", "ho opa sefubeng", "sefuba se a opa"],
+        "af": ["borspyn", "pyn in my bors", "druk op my bors", "bors is styf", "hartaanval"],
+        "nso": ["sehuba se bohloko", "bohloko sehubeng", "ke opša ke sehuba", "ke opsa ke sehuba", "ke bolawa ke sehuba", "sehuba se a opa", "sehuba se tiile"]
+      }
+    },
+    {
+      "id": "breathing",
+      "name": "Difficulty breathing",
+      "urgency": "RED",
+      "phrases": {
+        "en": ["can't breathe", "cant breathe", "cannot breathe", "difficulty breathing", "short of breath", "shortness of breath", "struggling to breathe", "hard to breathe", "gasping", "blue lips"],
+        "zu": ["angikwazi ukuphefumula", "ukuphefumula kanzima", "ngiphefumula kanzima", "uphefumula kanzima", "kunzima ukuphefumula", "ukuphelelwa umoya"],
+        "st": ["ke hema ka thata", "ho hema ka thata", "o hema ka thata", "ha ke kgone ho hema", "ho fellwa ke moya"],
+        "af": ["kan nie asemhaal nie", "sukkel om asem te haal", "kortasem", "moeilik om asem te haal", "asemnood"],
+        "nso": ["palelwa ke go hema", "go hema ka bothata", "ke hema ka bothata", "o hema ka bothata", "ga ke kgone go hema", "ga a kgone go hema"]
+      }
+    },
+    {
+      "id": "unconscious",
+      "name": "Unconscious / collapsed",
+      "urgency": "RED",
+      "phrases": {
+        "en": ["unconscious", "not waking up", "won't wake up", "fainted", "passed out", "collapsed", "unresponsive"],
+        "zu": ["uqulekile", "ukuquleka", "ngiqulekile", "akavuki", "uwe phansi"],
+        "st": ["o idibetse", "ke idibetse", "ho idibala", "ha a tsohe"],
+        "af": ["bewusteloos", "flou geval", "flou geword", "word nie wakker nie", "ineengestort"],
+        "nso": ["o idibetše", "o idibetse", "ke idibetše", "ke idibetse", "go idibala", "ga a tsoge"]
+      }
+    },
+    {
+      "id": "seizure",
+      "name": "Seizure / fitting",
+      "urgency": "RED",
+      "phrases": {
+        "en": ["seizure", "fitting", "convulsion", "had a fit", "having fits", "shaking uncontrollably"],
+        "zu": ["isithuthwane", "uyabanjwa", "ukudlikiza", "ubanjwe isithuthwane"],
+        "st": ["sethoathoa", "o a tshwarwa", "o tshwerwe ke sethoathoa"],
+        "af": ["stuiptrekkings", "epileptiese aanval", "toeval gehad", "stuipe"],
+        "nso": ["bolwetši bja go wa", "bolwetsi bja go wa", "o thothomela kudu", "o a thothomela"]
+      }
+    },
+    {
+      "id": "heavy_bleeding",
+      "name": "Heavy bleeding",
+      "urgency": "RED",
+      "phrases": {
+        "en": ["heavy bleeding", "bleeding heavily", "bleeding a lot", "won't stop bleeding", "wont stop bleeding", "vomiting blood"],
+        "zu": ["ngopha kakhulu", "uyopha kakhulu", "igazi eliningi", "ukopha okukhulu", "ukuhlanza igazi"],
+        "st": ["ho tswa madi a mangata", "madi a mangata", "ke tswa madi haholo", "ho hlatsa madi"],
+        "af": ["bloei baie", "erge bloeding", "hou nie op bloei nie", "bloed opgooi"],
+        "nso": ["ke tšwa madi kudu", "ke tswa madi kudu", "go tšwa madi kudu", "go tswa madi kudu", "madi a mantši", "madi a mantsi", "go hlatša madi", "go hlatsa madi"]
+      }
+    },
+    {
+      "id": "severe_burns",
+      "name": "Severe burns",
+      "urgency": "RED",
+      "phrases": {
+        "en": ["severe burn", "badly burned", "badly burnt", "burns all over", "burn on my face", "burnt face"],
+        "zu": ["ushile kakhulu", "ngishile kakhulu", "ukusha okukhulu"],
+        "st": ["o tjhele haholo", "ke tjhele haholo"],
+        "af": ["erg gebrand", "ernstige brandwond", "brandwonde oor my hele"],
+        "nso": ["ke swele kudu", "o swele kudu", "o swele sefahlego", "ke swele sefahlego"]
+      }
+    },
+    {
+      "id": "burns",
+      "name": "Burn injury",
+      "urgency": "ORANGE",
+      "phrases": {
+        "en": ["burned", "burnt", "boiling water", "scalded"],
+        "zu": ["ngishile", "ushile", "amanzi ashisayo"],
+        "st": ["ke tjhele", "o tjhele", "metsi a belang"],
+        "af": ["gebrand", "kookwater", "brandwond"],
+        "nso": ["ke swele", "o swele", "meetse a go fiša", "meetse a go fisa", "meetse a fišago", "meetse a fisago", "meetse a belago"]
+      }
+    },
+    {
+      "id": "stroke",
+      "name": "Signs of stroke",
+      "urgency": "RED",
+      "phrases": {
+        "en": ["face drooping", "face is drooping", "can't move my arm", "one side weak", "weakness on one side", "slurred speech", "can't speak properly", "sudden confusion", "stroke"],
+        "zu": ["ubuso buhlehlekile", "uhlangothi olulodwa", "isifo sohlangothi", "unhlangothi"],
+        "st": ["sefahleho se theohile", "lehlakore le le leng", "ho bua ka thata"],
+        "af": ["gesig hang", "een kant swak", "lam aan een kant", "sukkel om te praat", "beroerte"],
+        "nso": ["sefahlego se theogile", "lehlakore le tee", "ga a kgone go bolela gabotse", "go bolela ka bothata"]
+      }
+    },
+    {
+      "id": "pregnancy_danger",
+      "name": "Pregnancy danger sign",
+      "urgency": "RED",
+      "requires_pregnancy": true,
+      "phrases": {
+        "en": ["bleeding", "severe pain", "bad pain", "baby not moving", "baby is moving less", "baby stopped moving", "water broke", "waters broke", "severe headache", "blurred vision", "swollen face"],
+        "zu": ["ngiyopha", "ukopha", "igazi", "ingane ayinyakazi", "ubuhlungu obukhulu", "amanzi aphukile", "ikhanda elibuhlungu kakhulu"],
+        "st": ["ke tswa madi", "madi", "lesea ha le sisinyehe", "bohloko bo boholo", "metsi a robehile"],
+        "af": ["bloei", "baie pyn", "erge pyn", "baba beweeg nie", "water het gebreek", "erge hoofpyn", "dowwe sig"],
+        "nso": ["ke tšwa madi", "ke tswa madi", "madi", "ngwana ga a šikinyege", "ngwana ga a sikinyege", "bohloko bjo bogolo", "meetse a thubegile", "hlogo e bohloko kudu", "go bona ka bothata"]
+      }
+    },
+    {
+      "id": "child_danger",
+      "name": "Child danger sign (not drinking / very drowsy)",
+      "urgency": "RED",
+      "max_age": 12,
+      "phrases": {
+        "en": ["not drinking", "won't drink", "can't drink", "not breastfeeding", "not feeding", "very drowsy", "very sleepy", "floppy", "vomiting everything"],
+        "zu": ["akaphuzi", "akancelisi", "ulele kakhulu", "uyozela kakhulu", "uhlanza konke"],
+        "st": ["ha a nwe", "ha a anye", "o robetse haholo", "o otsela haholo", "o hlatsa tsohle"],
+        "af": ["drink nie", "drink niks", "drink nie borsmelk nie", "baie lomerig", "slap", "gooi alles op"],
+        "nso": ["ga a nwe", "ga a amuše", "ga a amuse", "o robala kudu", "o otsela kudu", "o hlatša tšohle", "o hlatsa tsohle", "o fokola kudu"]
+      }
+    },
+    {
+      "id": "self_harm",
+      "name": "Risk of self-harm",
+      "urgency": "RED",
+      "phrases": {
+        "en": ["kill myself", "suicide", "want to die", "end my life"],
+        "zu": ["ngifuna ukufa", "ukuzibulala"],
+        "st": ["ke batla ho shwa", "ho ipolaya"],
+        "af": ["selfmoord", "wil doodgaan", "my lewe neem"],
+        "nso": ["ke nyaka go hwa", "go ipolaya"]
+      }
+    },
+    {
+      "id": "poisoning",
+      "name": "Poisoning / overdose",
+      "urgency": "RED",
+      "phrases": {
+        "en": ["overdose", "swallowed poison", "drank poison", "drank paraffin", "swallowed paraffin"],
+        "zu": ["ushevu", "uphuze uparafini"],
+        "st": ["chefo", "o nwele parafene"],
+        "af": ["oordosis", "gif gedrink", "paraffien gedrink"],
+        "nso": ["mpholo", "chefo", "o nwele parafini"]
+      }
+    },
+    {
+      "id": "high_fever",
+      "name": "High fever / stiff neck",
+      "urgency": "ORANGE",
+      "phrases": {
+        "en": ["high fever", "very high temperature", "stiff neck"],
+        "zu": ["imfiva ephezulu", "umzimba ushisa kakhulu", "intamo eqinile"],
+        "st": ["feberu e phahameng", "mmele o tjhesa haholo", "molala o thata"],
+        "af": ["hoë koors", "baie koors", "stywe nek"],
+        "nso": ["fifere ye kgolo", "mmele o fiša kudu", "mmele o fisa kudu", "molala o thata", "molala o tiile"]
+      }
+    },
+    {
+      "id": "severe_pain",
+      "name": "Severe pain",
+      "urgency": "ORANGE",
+      "phrases": {
+        "en": ["severe pain", "worst pain", "unbearable pain", "terrible pain"],
+        "zu": ["ubuhlungu obukhulu kakhulu", "ubuhlungu obungabekezeleleki"],
+        "st": ["bohloko bo boholo haholo", "bohloko bo sa mamelleheng"],
+        "af": ["erge pyn", "ondraaglike pyn"],
+        "nso": ["bohloko bjo bogolo kudu", "bohloko kudu"]
+      }
+    },
+    {
+      "id": "head_injury",
+      "name": "Head injury",
+      "urgency": "ORANGE",
+      "phrases": {
+        "en": ["hit my head", "head injury", "fell on my head"],
+        "zu": ["ngishayeke ekhanda", "ukulimala ekhanda"],
+        "st": ["ke otlilwe hloohong", "kotsi hloohong"],
+        "af": ["kop gestamp", "kopbesering"],
+        "nso": ["ke ititile hlogo", "go gobala hlogong", "kotsi hlogong"]
+      }
+    },
+    {
+      "id": "coughing_blood",
+      "name": "Coughing blood",
+      "urgency": "ORANGE",
+      "phrases": {
+        "en": ["coughing blood", "coughing up blood", "blood when i cough"],
+        "zu": ["ukukhwehlela igazi", "ngikhwehlela igazi"],
+        "st": ["ho kgohlela madi", "ke kgohlela madi"],
+        "af": ["hoes bloed", "bloed opgehoes"],
+        "nso": ["go gohlola madi", "ke gohlola madi"]
+      }
+    }
+  ]
+}
