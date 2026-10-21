@@ -1,0 +1,14 @@
+# Copy of clinicq/.streamlit/config.toml. Streamlit Community Cloud only reads config from the repo root;
+# keep both files in sync when changing the theme.
+# ClinicQ colour theme for Streamlit's built-in widgets.
+# Extra styling (gradients, cards, badges) lives in core/ui.py.
+[theme]
+base = "light"
+primaryColor = "#0d9488"            # teal – buttons, sliders, focus rings
+backgroundColor = "#f4f6fb"
+secondaryBackgroundColor = "#e6f4f1"
+textColor = "#1e293b"
+font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
