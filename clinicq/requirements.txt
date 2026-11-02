@@ -3,6 +3,8 @@ streamlit>=1.50
 pydantic>=2.7
 python-dotenv>=1.0
 pytest>=8.0
+# Encrypted database backups (python -m core.backup)
+cryptography>=42.0
 
 # Claude provider (LLM_PROVIDER=anthropic)
 anthropic>=1.13.0

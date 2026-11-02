@@ -24,7 +24,7 @@ from streamlit.errors import StreamlitAPIException
 
 from core import database as db
 from core.demo import load_demo_patients
-from core.models import Urgency, Vitals
+from core.models import AVPU, MOBILITY, Urgency, Vitals
 from core.privacy import mask_id, mask_phone
 from core.queue_manager import (TARGET_MINUTES, CallError, call_patient, effective_urgency,
                                 get_waiting_queue, is_overdue, log_new_overdue,
@@ -35,7 +35,9 @@ from core.stations import AFTER_CLINICIAN, STATIONS, label
 from core import rooms
 from core.auth import allowed_stations, can_see_hiv_result, staff_label
 from core.auth_ui import require_staff, session_expired
-from core.ui import URGENCY_STYLE, chip, colour_key, hero, page_setup, tile, tiles, urgency_badge
+from core.settings import demo_mode
+from core.ui import URGENCY_STYLE, chip, colour_key, hero, md, page_setup, tile, tiles, urgency_badge
+from core.vitals import vitals_text
 from core.workflow import (HIV_RESULTS, complete_clinician, complete_station, load_contacts,
                            record_death, record_hiv_test, record_vitals, refer_to_hospital,
                            send_back_to_clinician)
@@ -108,9 +110,10 @@ if st.sidebar.button("Change station / room", width="stretch"):
 c1, c2, c3 = st.columns([1, 1, 2])
 if c1.button("🔄 Refresh now", width="stretch"):
     st.rerun()
-if c2.button("👥 Load demo patients", width="stretch"):
+if demo_mode() and c2.button("👥 Load demo patients", width="stretch"):
     with st.spinner("Registering demo patients…"):
-        load_demo_patients(sms)
+        added = load_demo_patients(sms)
+    db.add_audit("DEMO", nurse_action=f"{added} demo patients loaded by {staff_label(account)}")
     st.rerun()
 auto_refresh = c3.toggle(f"Auto-refresh every {AUTO_REFRESH_SECONDS} s", value=True,
                          help="Keeps your queue up to date. Turn off while filling in a long form.")
@@ -178,10 +181,7 @@ def vitals_chips(p: dict) -> str:
     if not p.get("vitals_json"):
         return chip("Vitals not taken yet", "slate")
     v = json.loads(p["vitals_json"])
-    text = (f"BP {v['bp_systolic']}/{v['bp_diastolic']} · {v['temperature']}°C"
-            + (f" · pulse {v['pulse']}" if v.get("pulse") else "")
-            + f" · urine infection: {v['urine_infection']} · pregnancy: {v['urine_pregnancy']}")
-    chips = chip("🩺 " + text, "teal")
+    chips = chip("🩺 " + vitals_text(v), "teal")
     for f in v.get("flags", []):
         chips += " " + chip("⚠️ " + f["name"], "pink")
     if v.get("note"):
@@ -204,25 +204,31 @@ def details_expander(p: dict) -> None:
     triage = json.loads(p["triage_json"])
     llm = triage.get("llm_output")
     with st.expander("🔎 Patient's own words, translation & questions to ask"):
-        st.markdown(f"**Original:** {p['symptoms_text']}")
+        # md() escapes patient/AI text so it can never become a link, image or formatting.
+        st.markdown(f"**Original:** {md(p['symptoms_text'])}")
         for m in triage["rules_result"]["matches"]:
-            st.markdown(f"- 🚩 {m['rule_name']} ({m['urgency']}) – “{m['matched_phrase']}” [{m['language']}]")
+            st.markdown(f"- 🚩 {md(m['rule_name'])} ({m['urgency']}) – “{md(m['matched_phrase'])}” "
+                        f"\\[{md(m['language'])}\\]")
+        for m in triage["rules_result"].get("negated", []):
+            st.markdown(f"- ⚪ {md(m['rule_name'])} – “{md(m['matched_phrase'])}” was mentioned with "
+                        "**no / not / without**, so it did not raise the colour. Check with the patient.")
         if llm:
-            st.markdown(f"**Language:** {llm['detected_language']}")
-            st.markdown(f"**English:** {llm['english_translation']}")
-            st.markdown(f"**Symptoms:** {', '.join(llm['symptoms']) or '—'} · "
-                        f"**Duration:** {llm['duration'] or '—'} · "
+            st.markdown(f"**Language:** {md(llm['detected_language'])}")
+            st.markdown(f"**English:** {md(llm['english_translation'])}")
+            st.markdown(f"**Symptoms:** {md(', '.join(llm['symptoms']) or '—')} · "
+                        f"**Duration:** {md(llm['duration'] or '—')} · "
                         f"**Severity:** {llm['self_reported_severity'] or '—'}/10")
             if llm["questions_for_nurse"]:
                 st.markdown("**Questions to ask:**")
                 for q in llm["questions_for_nurse"]:
-                    st.markdown(f"- {q}")
+                    st.markdown(f"- {md(q)}")
         else:
             st.error(f"AI failed – manual review needed. {triage.get('llm_error') or ''}")
-        if p.get("id_number"):
-            earlier = [v for v in db.visits_for_id(p["id_number"]) if v["id"] != p["id"]]
+        if p.get("folder_number"):
+            earlier = [v for v in db.visits_for_folder(p["folder_number"]) if v["id"] != p["id"]]
             if earlier:
-                st.markdown(f"**Earlier visits:** {len(earlier)} (see Patient Records)")
+                st.markdown(f"**Earlier visits:** {len(earlier)} in folder {md(p['folder_number'])} "
+                            "(see Patient Records)")
 
 
 def empty(message: str) -> None:
@@ -240,25 +246,43 @@ def done(message: str, icon: str = "✅") -> None:
 # ---------------------------------------------------------------------------
 def vitals_form(p: dict) -> None:
     female = p["sex"] == "Female"
+    child = p["age"] <= 12
     with st.form(f"vitals_{p['id']}"):
-        st.markdown("**🩺 Vital signs & urine tests**")
+        st.markdown("**🩺 Vital signs**")
         c1, c2, c3, c4 = st.columns(4)
         sys_bp = c1.number_input("BP systolic *", 50, 260, value=None, placeholder="e.g. 120")
         dia_bp = c2.number_input("BP diastolic *", 30, 160, value=None, placeholder="e.g. 80")
         temp = c3.number_input("Temperature °C *", 30.0, 44.0, value=None, step=0.1, format="%.1f",
                                placeholder="e.g. 36.8")
-        pulse = c4.number_input("Pulse /min", 20, 250, value=None, placeholder="optional")
-        c5, c6 = st.columns(2)
-        infection = c5.radio("Urine – infection (dipstick)", ["Not done", "Negative", "Positive"],
-                             horizontal=True)
+        pulse = c4.number_input("Pulse /min", 20, 250, value=None, placeholder="e.g. 78")
+        c5, c6, c7, c8 = st.columns(4)
+        resp = c5.number_input("Resp. rate /min", 4, 80, value=None, placeholder="e.g. 16")
+        spo2 = c6.number_input("SpO₂ %", 50, 100, value=None, placeholder="e.g. 98")
+        glucose = c7.number_input("Glucose mmol/L", 0.5, 40.0, value=None, step=0.1, format="%.1f",
+                                  placeholder="if needed")
+        weight = c8.number_input("Weight kg" + (" *" if child else ""), 0.5, 300.0, value=None, step=0.1,
+                                 format="%.1f", placeholder="needed for children" if child else "optional")
+        if child:
+            st.caption("👶 Child: weight is required (medicine doses). Use the paediatric TEWS chart – "
+                       "ClinicQ calculates the adult TEWS only.")
+        else:
+            st.markdown("**TEWS** – with pulse and respiratory rate, these give the adult SATS TEWS score")
+            c9, c10, c11 = st.columns(3)
+            mobility = c9.radio("Mobility", MOBILITY, index=None, horizontal=True)
+            avpu = c10.selectbox("AVPU / consciousness", AVPU, index=None, placeholder="Choose")
+            trauma = c11.radio("Trauma (injury)?", ["No", "Yes"], index=None, horizontal=True)
+        st.markdown("**🧪 Urine tests**")
+        c12, c13 = st.columns(2)
+        infection = c12.radio("Urine – infection (dipstick)", ["Not done", "Negative", "Positive"],
+                              horizontal=True)
         pregnancy_options = ["Not done", "Negative", "Positive"] if female else ["Not applicable"]
-        pregnancy = c6.radio("Urine – pregnancy test", pregnancy_options, horizontal=True)
+        pregnancy = c13.radio("Urine – pregnancy test", pregnancy_options, horizontal=True)
         st.markdown("**🎨 Triage colour**")
-        c7, c8 = st.columns([1, 2])
-        colour = c7.selectbox("Colour", ["Use suggestion (automatic)"] + [u.value for u in Urgency],
-                              help="The suggestion is the highest of: current colour, vital-sign "
-                                   "danger flags and the red-flag rules.")
-        reason = c8.text_input("Reason (needed if you choose a lower colour than suggested)")
+        c14, c15 = st.columns([1, 2])
+        colour = c14.selectbox("Colour", ["Use suggestion (automatic)"] + [u.value for u in Urgency],
+                               help="The suggestion is the highest of: current colour, vital-sign "
+                                    "danger flags, the TEWS score and the red-flag rules.")
+        reason = c15.text_input("Reason (needed if you choose a lower colour than suggested)")
         note = st.text_area("📝 Note for the Nurse/Doctor (optional)", height=80, max_chars=600,
                             placeholder="e.g. Patient anxious, pain started after lifting boxes, "
                                         "missed BP tablets for 3 days.")
@@ -268,6 +292,9 @@ def vitals_form(p: dict) -> None:
                 return
             try:
                 vitals = Vitals(bp_systolic=sys_bp, bp_diastolic=dia_bp, temperature=temp, pulse=pulse,
+                                resp_rate=resp, spo2=spo2, glucose=glucose, weight_kg=weight,
+                                mobility=None if child else mobility, avpu=None if child else avpu,
+                                trauma=None if child or trauma is None else trauma == "Yes",
                                 urine_infection=infection, urine_pregnancy=pregnancy)
                 chosen = None if colour.startswith("Use") else Urgency(colour)
                 result = record_vitals(p["id"], vitals, MY_NAME, sms, chosen, reason, note)

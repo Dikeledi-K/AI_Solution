@@ -18,6 +18,7 @@ Patient journey (column `station` + `status`):
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import os
@@ -39,7 +40,10 @@ DEFAULT_DB_PATH = BASE_DIR / "data" / "clinicq.db"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS patients (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-    queue_number        INTEGER NOT NULL,
+    queue_number        INTEGER NOT NULL,       -- starts again at 1 every day
+    visit_date          TEXT,                   -- YYYY-MM-DD the patient registered
+    folder_number       TEXT,                   -- the clinic folder, the same for every visit
+    registered_by       TEXT,                   -- clerk / staff member who registered the visit
     -- personal details (never sent to the AI; masked on dashboards)
     first_name          TEXT NOT NULL,
     surname             TEXT,
@@ -116,8 +120,24 @@ CREATE TABLE IF NOT EXISTS audit_log (
     ai_output       TEXT,            -- JSON (or error message)
     final_urgency   TEXT,
     nurse_action    TEXT,
-    details         TEXT
+    details         TEXT,
+    prev_hash       TEXT,            -- row_hash of the entry before this one
+    row_hash        TEXT             -- SHA-256 of this entry + prev_hash (tamper evidence)
 );
+
+CREATE TABLE IF NOT EXISTS counters (
+    name            TEXT PRIMARY KEY,   -- e.g. 'folder'
+    value           INTEGER NOT NULL
+);
+"""
+
+# The audit log is append-only: the database itself refuses to change or delete an entry.
+# (Created after migrations, which are the only code that ever fills in old rows.)
+AUDIT_TRIGGERS = """
+CREATE TRIGGER IF NOT EXISTS audit_log_no_update BEFORE UPDATE ON audit_log
+BEGIN SELECT RAISE(ABORT, 'The audit log is append-only: entries cannot be changed.'); END;
+CREATE TRIGGER IF NOT EXISTS audit_log_no_delete BEFORE DELETE ON audit_log
+BEGIN SELECT RAISE(ABORT, 'The audit log is append-only: entries cannot be deleted.'); END;
 """
 
 
@@ -130,7 +150,8 @@ def get_connection() -> Iterator[sqlite3.Connection]:
     """Open a connection, commit on success, always close."""
     path = get_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    # Several tablets write at once: wait up to 10 s for a lock instead of failing.
+    conn = sqlite3.connect(path, timeout=10)
     conn.row_factory = sqlite3.Row  # rows behave like dicts
     try:
         yield conn
@@ -150,7 +171,20 @@ MIGRATIONS = {
     "called_by": "TEXT", "outcome": "TEXT", "outcome_details": "TEXT", "vitals_json": "TEXT",
     "vitals_by": "TEXT", "clinician_notes": "TEXT", "clinician_name": "TEXT",
     "hiv_test_json": "TEXT",
+    "visit_date": "TEXT", "folder_number": "TEXT", "registered_by": "TEXT",
 }
+
+# Audit hash chain: each entry's hash covers its own content AND the previous entry's
+# hash, so changing or removing any old entry breaks every hash after it.
+GENESIS_HASH = "0" * 64
+HASHED_FIELDS = ["timestamp", "event_type", "patient_id", "queue_number", "patient_name", "input_text",
+                 "rules_result", "ai_output", "final_urgency", "nurse_action", "details"]
+
+
+def audit_hash(entry: dict, prev_hash: str) -> str:
+    content = json.dumps({k: entry.get(k) for k in HASHED_FIELDS}, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256((prev_hash + content).encode("utf-8")).hexdigest()
+
 
 # Patients called before rooms existed have room = NULL; treat them as "Room 1".
 DEFAULT_ROOM = "Room 1"
@@ -168,6 +202,7 @@ def init_db() -> None:
         conn.execute("UPDATE patients SET room = 'Room ' || room "
                      "WHERE room IS NOT NULL AND room NOT GLOB '*[^0-9]*'")
         _migrate_audit_log(conn)
+        conn.executescript(AUDIT_TRIGGERS)
         if "status" in existing:
             # Before stations existed, a finished patient had status 'seen'.
             conn.execute("UPDATE patients SET status = 'done', outcome = COALESCE(outcome, 'DISCHARGED') "
@@ -185,21 +220,36 @@ DEFAULT_ACTIONS = {
 
 
 def _migrate_audit_log(conn) -> None:
-    """Add the patient_name column to older databases and fill in what is reliably known.
+    """Bring an older audit log up to date. Runs ONCE per database, before the
+    append-only triggers exist, because it is the only code allowed to fill in old rows.
 
-    The colour is NOT back-filled for old entries: only the patient's colour now is
-    known, not what it was at the time of the event.
+    - adds patient_name and fills in what is reliably known (the colour is NOT
+      back-filled: only the patient's colour now is known, not what it was then);
+    - adds the tamper-evidence hash chain and hashes the existing entries.
     """
     columns = {row[1] for row in conn.execute("PRAGMA table_info(audit_log)")}
     if "patient_name" not in columns:
         conn.execute("ALTER TABLE audit_log ADD COLUMN patient_name TEXT")
-    conn.execute("""UPDATE audit_log SET patient_name = (
-                        SELECT TRIM(p.first_name || ' ' || COALESCE(p.surname, ''))
-                        FROM patients p WHERE p.id = audit_log.patient_id)
-                    WHERE patient_name IS NULL AND patient_id IS NOT NULL""")
-    for event, action in DEFAULT_ACTIONS.items():
-        conn.execute("UPDATE audit_log SET nurse_action = ? WHERE event_type = ? AND nurse_action IS NULL",
-                     (action, event))
+        conn.execute("""UPDATE audit_log SET patient_name = (
+                            SELECT TRIM(p.first_name || ' ' || COALESCE(p.surname, ''))
+                            FROM patients p WHERE p.id = audit_log.patient_id)
+                        WHERE patient_name IS NULL AND patient_id IS NOT NULL""")
+        for event, action in DEFAULT_ACTIONS.items():
+            conn.execute("UPDATE audit_log SET nurse_action = ? WHERE event_type = ? AND nurse_action IS NULL",
+                         (action, event))
+    if "row_hash" not in columns:
+        # An older database may already have the triggers from a previous run of this
+        # version; drop them just for this one-time back-fill.
+        conn.execute("DROP TRIGGER IF EXISTS audit_log_no_update")
+        conn.execute("ALTER TABLE audit_log ADD COLUMN prev_hash TEXT")
+        conn.execute("ALTER TABLE audit_log ADD COLUMN row_hash TEXT")
+        prev = GENESIS_HASH
+        for row in conn.execute("SELECT * FROM audit_log ORDER BY id").fetchall():
+            entry = dict(row)
+            row_hash = audit_hash(entry, prev)
+            conn.execute("UPDATE audit_log SET prev_hash = ?, row_hash = ? WHERE id = ?",
+                         (prev, row_hash, entry["id"]))
+            prev = row_hash
 
 
 def now_iso() -> str:
@@ -209,18 +259,52 @@ def now_iso() -> str:
 # ---------------------------------------------------------------------------
 # Registration
 # ---------------------------------------------------------------------------
+class AlreadyInClinic(ValueError):
+    """The person already has an unfinished visit today (stops double registration)."""
+
+
+def _next_folder_number(conn) -> str:
+    """A new clinic folder number, e.g. F000042. Numbers are never reused."""
+    conn.execute("INSERT OR IGNORE INTO counters (name, value) VALUES ('folder', 0)")
+    conn.execute("UPDATE counters SET value = value + 1 WHERE name = 'folder'")
+    value = conn.execute("SELECT value FROM counters WHERE name = 'folder'").fetchone()[0]
+    return f"F{value:06d}"
+
+
+def normalise_folder_number(folder: Optional[str]) -> Optional[str]:
+    folder = (folder or "").strip().upper()
+    return folder or None
+
+
 def add_patient(
     intake: PatientIntake,
     triage: TriageResult,
     arrival_time: Optional[str] = None,
     arrival_entered_by_staff: bool = False,
+    folder_number: Optional[str] = None,
+    registered_by: Optional[str] = None,
 ) -> int:
     """Save a newly registered, triaged patient (they start in the VITALS queue).
 
-    Writes a TRIAGE audit entry. Returns the patient id.
+    folder_number: the returning patient's existing folder. If it is None but the
+    ID/passport number already has a folder, that folder is reused, so one person
+    never gets two folders. Otherwise a new folder number is created.
+    Raises AlreadyInClinic if that folder already has an unfinished visit.
+
+    Queue numbers start again at 1 every day. Writes a TRIAGE audit entry.
+    Returns the patient id.
     """
     init_db()
     arrival_time = arrival_time or now_iso()
+    folder_number = normalise_folder_number(folder_number)
+    if folder_number is None and intake.id_number:
+        folder_number = folder_for_id(intake.id_number)
+    if folder_number:
+        active = active_visit(folder_number)
+        if active:
+            raise AlreadyInClinic(
+                f"Folder {folder_number} ({active['first_name']} {active.get('surname') or ''}) is already "
+                f"in the clinic today as queue number #{active['queue_number']}.")
     llm = triage.llm_output
     values = {
         "first_name": intake.first_name, "surname": intake.surname,
@@ -238,10 +322,16 @@ def add_patient(
         "chief_complaint": llm.chief_complaint if llm else "Needs manual review",
         "explanation": triage.explanation(), "triage_json": triage.model_dump_json(),
         "station": FIRST_STATION, "status": "waiting",
+        "visit_date": datetime.now().date().isoformat(), "registered_by": registered_by,
     }
     with get_connection() as conn:
+        # Lock the database for this whole step, so two clerks registering at the same
+        # moment can never get the same queue or folder number.
+        conn.execute("BEGIN IMMEDIATE")
         values["queue_number"] = conn.execute(
-            "SELECT COALESCE(MAX(queue_number), 0) + 1 FROM patients").fetchone()[0]
+            "SELECT COALESCE(MAX(queue_number), 0) + 1 FROM patients WHERE visit_date = ?",
+            (values["visit_date"],)).fetchone()[0]
+        values["folder_number"] = folder_number or _next_folder_number(conn)
         columns = ", ".join(values)
         placeholders = ", ".join("?" for _ in values)
         cursor = conn.execute(f"INSERT INTO patients ({columns}) VALUES ({placeholders})",
@@ -256,11 +346,66 @@ def add_patient(
         rules_result=triage.rules_result.model_dump_json(),
         ai_output=llm.model_dump_json() if llm else f"AI FAILED – fallback used. {triage.llm_error}",
         final_urgency=triage.final_urgency.value,
+        nurse_action=f"Registered by {registered_by}" if registered_by else None,
         details=f"decided_by={triage.decided_by}; provider={triage.llm_provider}; "
                 f"attempts={triage.llm_attempts}; arrival={arrival_time}"
-                f"{' (entered by staff)' if arrival_entered_by_staff else ''}",
+                f"{' (entered by staff)' if arrival_entered_by_staff else ''}; "
+                f"folder={values['folder_number']}",
     )
     return patient_id
+
+
+# ---------------------------------------------------------------------------
+# Returning patients (folder lookup at registration)
+# ---------------------------------------------------------------------------
+def folder_for_id(id_number: str) -> Optional[str]:
+    """The folder already used by this ID/passport/permit number, if any."""
+    init_db()
+    with get_connection() as conn:
+        row = conn.execute("SELECT folder_number FROM patients WHERE id_number = ? AND folder_number IS NOT NULL "
+                           "ORDER BY id DESC LIMIT 1", (id_number.replace(" ", "").upper(),)).fetchone()
+    return row[0] if row else None
+
+
+def active_visit(folder_number: str) -> Optional[dict]:
+    """The folder's unfinished visit (waiting or in a room), if any."""
+    init_db()
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM patients WHERE folder_number = ? AND status != 'done' "
+                           "ORDER BY id DESC LIMIT 1", (folder_number,)).fetchone()
+    return dict(row) if row else None
+
+
+def find_returning_patients(query: str, limit: int = 20) -> list[dict]:
+    """People who visited before, matched on folder number, ID number or name.
+
+    Returns the LATEST visit for each folder (one row per person), newest first.
+    """
+    init_db()
+    query = (query or "").strip()
+    if len(query) < 2:
+        return []
+    upper = query.replace(" ", "").upper()
+    like = f"%{query}%"
+    with get_connection() as conn:
+        rows = conn.execute(
+            """SELECT * FROM patients p
+               WHERE p.folder_number IS NOT NULL
+                 AND p.id = (SELECT MAX(id) FROM patients q WHERE q.folder_number = p.folder_number)
+                 AND (p.folder_number = ? OR p.id_number = ? OR p.first_name LIKE ? OR p.surname LIKE ?
+                      OR (p.first_name || ' ' || COALESCE(p.surname, '')) LIKE ?)
+               ORDER BY p.arrival_time DESC LIMIT ?""",
+            (upper, upper, like, like, like, limit),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def visits_for_folder(folder_number: str) -> list[dict]:
+    """Every visit in this folder, newest first."""
+    with get_connection() as conn:
+        rows = conn.execute("SELECT * FROM patients WHERE folder_number = ? ORDER BY arrival_time DESC, id DESC",
+                            (folder_number,)).fetchall()
+    return [dict(r) for r in rows]
 
 
 def get_patient(patient_id: int) -> Optional[dict]:
@@ -453,7 +598,7 @@ def mark_overdue_logged(patient_id: int) -> None:
 # Patient records (full details – only shown on the PIN-protected page)
 # ---------------------------------------------------------------------------
 RECORD_COLUMNS = [
-    "queue_number", "arrival_time", "first_name", "surname", "id_type", "id_number",
+    "folder_number", "queue_number", "arrival_time", "registered_by", "first_name", "surname", "id_type", "id_number",
     "date_of_birth", "age", "sex", "address", "phone", "nok_name", "nok_relationship", "nok_phone",
     "pregnant", "chronic_conditions", "symptoms_text", "chief_complaint", "final_urgency",
     "nurse_urgency", "vitals_json", "vitals_by", "clinician_notes", "clinician_name", "status",
@@ -462,7 +607,7 @@ RECORD_COLUMNS = [
 
 
 def search_patients(query: str = "") -> list[dict]:
-    """All visits, newest first, filtered by name, surname, ID number or queue number."""
+    """All visits, newest first, filtered by name, surname, ID number, folder or queue number."""
     init_db()
     q = f"%{query.strip()}%"
     with get_connection() as conn:
@@ -470,8 +615,9 @@ def search_patients(query: str = "") -> list[dict]:
             """SELECT * FROM patients
                WHERE ? = '%%' OR first_name LIKE ? OR surname LIKE ? OR id_number LIKE ?
                   OR CAST(queue_number AS TEXT) = ? OR (first_name || ' ' || COALESCE(surname, '')) LIKE ?
+                  OR folder_number = ?
                ORDER BY arrival_time DESC""",
-            (q, q, q, q, query.strip(), q),
+            (q, q, q, q, query.strip(), q, query.strip().upper()),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -484,12 +630,24 @@ def visits_for_id(id_number: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
-def records_csv(rows: list[dict]) -> str:
+def _csv_safe(value):
+    """Stop CSV/formula injection: text a patient typed (e.g. "=HYPERLINK(...)") must never
+    run as a formula when a manager opens the export in Excel."""
+    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + value
+    return value
+
+
+def _write_csv(rows: list[dict], columns: list[str]) -> str:
     buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=RECORD_COLUMNS, extrasaction="ignore")
+    writer = csv.DictWriter(buffer, fieldnames=columns, extrasaction="ignore")
     writer.writeheader()
-    writer.writerows(rows)
+    writer.writerows({k: _csv_safe(v) for k, v in row.items()} for row in rows)
     return buffer.getvalue()
+
+
+def records_csv(rows: list[dict]) -> str:
+    return _write_csv(rows, RECORD_COLUMNS)
 
 
 # ---------------------------------------------------------------------------
@@ -543,19 +701,23 @@ def count_open_alerts() -> int:
 
 
 def clear_all() -> None:
-    """Delete all patients, alerts and audit entries (used by 'Reset demo')."""
+    """Delete all patients and alerts (demo mode's 'Reset demo data').
+
+    The audit log is NEVER deleted – the reset itself is logged by the caller – and
+    folder numbers are never reused.
+    """
     init_db()
     with get_connection() as conn:
         conn.execute("DELETE FROM patients")
         conn.execute("DELETE FROM alerts")
-        conn.execute("DELETE FROM audit_log")
 
 
 # ---------------------------------------------------------------------------
 # Audit log
 # ---------------------------------------------------------------------------
 AUDIT_COLUMNS = ["id", "timestamp", "event_type", "patient_id", "queue_number", "patient_name",
-                 "input_text", "rules_result", "ai_output", "final_urgency", "nurse_action", "details"]
+                 "input_text", "rules_result", "ai_output", "final_urgency", "nurse_action", "details",
+                 "prev_hash", "row_hash"]
 
 
 def add_audit(event_type: str, **fields) -> None:
@@ -579,10 +741,33 @@ def add_audit(event_type: str, **fields) -> None:
         fields["nurse_action"] = DEFAULT_ACTIONS[event_type]
     fields["timestamp"] = now_iso()
     fields["event_type"] = event_type
-    columns = ", ".join(fields)
-    placeholders = ", ".join("?" for _ in fields)
     with get_connection() as conn:
+        # Lock while reading the last hash and appending, so the chain never forks.
+        conn.execute("BEGIN IMMEDIATE")
+        last = conn.execute("SELECT row_hash FROM audit_log ORDER BY id DESC LIMIT 1").fetchone()
+        fields["prev_hash"] = (last[0] if last else None) or GENESIS_HASH
+        fields["row_hash"] = audit_hash(fields, fields["prev_hash"])
+        columns = ", ".join(fields)
+        placeholders = ", ".join("?" for _ in fields)
         conn.execute(f"INSERT INTO audit_log ({columns}) VALUES ({placeholders})", tuple(fields.values()))
+
+
+def verify_audit_chain() -> dict:
+    """Re-calculate every hash in the audit log.
+
+    Returns {"ok": bool, "entries": n, "first_bad_id": id or None}. Any edit to, or
+    removal of, an earlier entry (e.g. directly in the database file) breaks the chain.
+    """
+    init_db()
+    prev = GENESIS_HASH
+    with get_connection() as conn:
+        rows = conn.execute("SELECT * FROM audit_log ORDER BY id").fetchall()
+    for row in rows:
+        entry = dict(row)
+        if entry["prev_hash"] != prev or entry["row_hash"] != audit_hash(entry, prev):
+            return {"ok": False, "entries": len(rows), "first_bad_id": entry["id"]}
+        prev = entry["row_hash"]
+    return {"ok": True, "entries": len(rows), "first_bad_id": None}
 
 
 def get_audit_log(event_type: Optional[str] = None, patient_id: Optional[int] = None) -> list[dict]:
@@ -601,8 +786,4 @@ def get_audit_log(event_type: Optional[str] = None, patient_id: Optional[int] = 
 
 def audit_log_csv(rows: Optional[list[dict]] = None) -> str:
     rows = rows if rows is not None else get_audit_log()
-    buffer = io.StringIO()
-    writer = csv.DictWriter(buffer, fieldnames=AUDIT_COLUMNS)
-    writer.writeheader()
-    writer.writerows(rows)
-    return buffer.getvalue()
+    return _write_csv(rows, AUDIT_COLUMNS)

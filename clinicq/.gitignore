@@ -12,4 +12,7 @@ __pycache__/
 
 # Local data (patient records must never be committed)
 data/*.db
+data/*.db-journal
 data/sms_outbox.log
+# Backups are encrypted, but still never belong in git
+backups/

@@ -22,20 +22,21 @@ different rooms (vitals, consultation, pharmacy…) have no shared view of who i
 
 | | |
 |---|---|
-| 📝 **Registers patients** | Personal details, ID document, next of kin, POPIA consent, and symptoms in the patient's own words in 5 languages. |
+| 📝 **Registers patients** | A signed-in **registration clerk** finds the patient's **clinic folder** (or opens a new one), checks their details, next of kin and POPIA consent, and types the symptoms in the patient's own words in 5 languages. Nobody can be registered twice. |
 | 🚩 **Flags danger early** | Red-flag rules (no AI) catch danger signs such as chest pain, pregnancy bleeding or a child who isn't drinking, and force the patient to the top of the queue. |
 | 🤖 **Structures with AI** | An LLM translates and summarises the symptoms and suggests a triage colour. It never receives names, ID numbers or addresses. |
-| 🩺 **Guides the clinic flow** | Each station has its own queue: Vitals → Nurse/Doctor → HIV testing → Injection → Pharmacy. Patients are ordered by urgency and fair waiting time. |
+| 🩺 **Guides the clinic flow** | Each station has its own queue: Vitals → Nurse/Doctor → HIV testing → Injection → Pharmacy. Patients are ordered by urgency and fair waiting time. A **waiting-room screen** shows who is being called and where. |
 | 🚪 **Manages rooms** | 14 named rooms. Staff select a free room; one patient per room at a time, for privacy. |
-| 🔐 **Secures access** | Personal staff ID + PIN, roles, account lockout and automatic sign-out. |
+| 🔐 **Secures access** | Personal staff ID + PIN that only the staff member knows, roles, lockout, automatic sign-out, and an audit log that cannot be changed. |
 | 🚑 **Coordinates emergencies** | Hospital referral alerts the ambulance coordinator, then the receiving hospital. A death alerts the facility manager. |
-| 🗂️ **Keeps records** | A searchable patient database and a full audit log of who did what, and when. |
+| 🗂️ **Keeps records** | Patient folders with every visit, a tamper-evident audit log of who did what and when, a **daily report** for the facility manager, and **encrypted backups**. |
+| 📶 **Works without internet** | Can run on one computer inside the clinic, with tablets on the clinic Wi-Fi – see [deploy/LOCAL_NETWORK_SETUP.md](deploy/LOCAL_NETWORK_SETUP.md). |
 
 ## 3. The patient journey
 
 ```mermaid
 flowchart LR
-    A[📝 Register<br/>Patient Intake] --> B[🩺 Vitals & tests<br/>Vitals Room]
+    A[📝 Register<br/>Patient Intake – clerk] --> B[🩺 Vitals & tests<br/>Vitals Room]
     B --> C[👩‍⚕️ Nurse / Doctor<br/>Consultation Room]
     C -->|if referred| D[🧪 HIV testing<br/>HIV Counselling Room]
     D -->|positive result| C
@@ -52,15 +53,15 @@ flowchart LR
 
 | Step | Who | What happens |
 |---|---|---|
-| **1. Registration** | Patient or clerk – *Patient Intake* | First name, surname, ID document (SA ID, passport, asylum/refugee permit, or none), age, sex, address, contact number, **next of kin**, pregnancy, chronic conditions, **POPIA consent**, and *"Describe how you are feeling"* in any of the 5 languages. SA ID numbers are checked (checksum and date of birth must match the age). The patient gets a **queue number ticket**. |
+| **1. Registration** | Registration clerk (signed in) – *Patient Intake* | **Search first:** a returning patient is found by folder number, ID/passport number or name, and the form is filled in from their folder for the clerk to check. A new patient gets a new **folder number** (e.g. `F000012`); an ID number that already has a folder is linked to it automatically, and a person already in the clinic cannot be registered twice. Then: first name, surname, ID document (SA ID, passport, asylum/refugee permit, or none), age, sex, address, contact number, **next of kin**, pregnancy, chronic conditions, **POPIA consent**, and *"Describe how you are feeling"* in any of the 5 languages. SA ID numbers are checked (checksum and date of birth must match the age). The patient gets a **queue number ticket** (queue numbers start at 1 every day). |
 | **2. Triage** | Automatic | **Red-flag rules run first** and can only raise urgency. The **AI** suggests a colour; if its answer is invalid it is retried once, then falls back to **YELLOW – manual review**. Final colour = the higher of rules and AI. |
-| **3. Vitals & tests** | Nurse – *Vitals Room* | BP, temperature, pulse, urine **infection** and **pregnancy** tests. Dangerous readings raise the colour. A **positive pregnancy test re-checks the pregnancy danger signs**. The nurse **confirms the colour** (choosing a lower colour needs a reason) and can write a **note for the Nurse/Doctor**. |
+| **3. Vitals & tests** | Nurse – *Vitals Room* | BP, temperature, pulse, **respiratory rate, SpO₂, blood glucose, weight** (required for children), urine **infection** and **pregnancy** tests, and for adults **mobility, AVPU and trauma**, which give the **adult SATS TEWS score**. Dangerous readings and the TEWS score raise the colour. A **positive pregnancy test re-checks the pregnancy danger signs**. The nurse **confirms the colour** (choosing a lower colour needs a reason) and can write a **note for the Nurse/Doctor**. |
 | **4. Nurse / Doctor** | Nurse or doctor – *Consultation or Emergency Room* | Sees the complaint, the patient's own words and translation, vitals, **the vitals nurse's note**, AI-suggested questions and, later, the HIV result. Writes the **assessment & prescription** and ticks the rooms the patient needs. They always go in the order **🧪 HIV testing → 💉 Injection → 💊 Pharmacy**, or home if nothing is ticked. Can also **refer to hospital** or **record a death**. |
 | **5. HIV testing** | HIV counsellor or nurse – *HIV Counselling Room* | Records **pre-test counselling & consent** and the **result** (Negative / Positive confirmed with a second test / Inconclusive / Declined). **A positive result must go back to the Nurse/Doctor** for ART initiation and linkage to care; the remaining rooms are kept. |
 | **6. Injection room** | Nurse – *Injection Room* | Sees the prescription and the route, gives the injection, then sends the patient on. |
 | **7. Pharmacy** | Pharmacist – *Pharmacy Counter* | Sees the prescription, hands over the medication, and the visit ends (**🏠 Home**). |
 
-At every room the staff member **calls** the next patient (a simulated SMS tells the patient which room to go to),
+At every room the staff member **calls** the next patient (a simulated SMS and the **waiting-room screen** tell the patient which room to go to – by its neutral door number, e.g. "Room 12"),
 does their work, and presses **Done** to send them to the next room. **Not here** puts a patient who didn't come
 back in the queue without losing their place.
 
@@ -99,12 +100,14 @@ key, so everyone reads the colours the same way.
 | Page | Who | What it is for |
 |---|---|---|
 | 🏠 **Home** | Everyone | Live clinic overview: patients waiting per station and per colour, overdue, open alerts, rooms in use. Also the **colour key**, the patient journey, what ClinicQ does, *"Which page do I use?"* and the demo controls. |
-| 📝 **Patient Intake** | Patients / clerk (no sign-in) | Registration form → queue number ticket. Staff can enter an earlier arrival time. |
+| 📝 **Patient Intake** | Registration clerks (also nurses, doctors, manager, admin) | **Sign in** → search for the patient's folder → registration form → queue number ticket. Staff can enter an earlier arrival time. |
 | 🩺 **Staff Dashboard** | Nurses, doctors, pharmacists, HIV counsellors | **Sign in** → choose your **station** and a **free room** → your station's queue → **Call now** → the **"With you now"** card shows the form for your station → **Done** sends the patient on. A compact **colour key** sits above the queue, with a rooms overview and a live count per station. |
 | 🚨 **Alerts** | Every signed-in role (mainly ambulance coordinator & facility manager) | Ambulance requests, hospital notifications, death follow-up tasks. A pulsing badge on every page shows open alerts. |
-| 🗂️ **Patient Records** | Nurses, doctors, facility manager, admin | Search all visits, full patient details, earlier visits, CSV export. Every record opened is logged. |
-| 📋 **Audit Log** | Facility manager, admin | Every triage decision, colour change, room, station move, alert, sign-in and record view, with time and staff name. CSV export. |
-| 👥 **Staff** | Everyone: change own PIN. Admin: manage accounts | Add staff, reset PINs, unlock, deactivate, add demo accounts, free a stuck room. |
+| 🗂️ **Patient Records** | Nurses, doctors, facility manager, admin | Search all visits by name, ID, **folder** or queue number; full patient details and earlier visits in the folder. **CSV export: facility manager and admin only.** Every record opened is logged. |
+| 📊 **Reports** | Facility manager, admin | Daily numbers only (no names): registrations, outcomes, waiting time to vitals per colour against SATS targets, AI failures, and **how often the vitals nurse changed the colour, per language** (early warning of language bias). CSV export. |
+| 📋 **Audit Log** | Facility manager, admin | Every triage decision, colour change, room, station move, alert, sign-in, folder search and record view, with time and staff name. A banner shows whether the **tamper check** passed. CSV export. |
+| 👥 **Staff** | Everyone: change own PIN. Admin: manage accounts | Add staff, reset PINs (the person must then choose their own), unlock, deactivate, free a stuck room. |
+| 📺 **Waiting Room screen** | The TV in the waiting area (no sign-in) | The queue numbers being called and their **door numbers** – never names, colours or what a room is for. Refreshes itself. |
 
 ### What each role can do
 
@@ -115,8 +118,9 @@ key, so everyone reads the colours the same way.
 | Pharmacist | Pharmacy | Alerts |
 | HIV counsellor | HIV testing | Alerts |
 | Ambulance coordinator | — | Alerts |
-| Facility manager | — | Records, Alerts, Audit Log |
-| Admin | All | Everything, incl. Staff management and Reset |
+| Registration clerk | — | Patient Intake, Alerts |
+| Facility manager | — | Patient Intake, Records (+ export), Reports, Alerts, Audit Log |
+| Admin | All | Everything, incl. Staff management (and Reset in demo mode) |
 
 - **The role belongs to the staff account; staff cannot choose it.** After sign-in, the station list only shows the stations that role allows. A nurse is never offered 💊 Pharmacy, and a pharmacist only sees 💊 Pharmacy.
 - **Nurses may do HIV testing on purpose:** in South African clinics, professional nurses routinely do HIV testing and start ART. To limit HIV rooms to counsellors, change `ROLES` in `core/auth.py`.
@@ -136,6 +140,7 @@ key, so everyone reads the colours the same way.
 - **Choosing a room:** staff choose from a dropdown (no typing) that only lists **free rooms for their station**.
 - **Reserved while in use:** a room is reserved while someone works in it and freed when they sign out or change room. It also frees itself after 30 min without activity, unless a patient is still inside.
 - **Stuck rooms:** an admin can free a stuck room on the Staff page.
+- **Door numbers:** each room also has a `door` number (e.g. *HIV Counselling Room 1* is "Room 12"). Patients only ever see the door number, in the SMS and on the waiting-room screen, so nobody in the waiting room can tell who is going for HIV testing.
 - **Your clinic's layout:** edit `data/rooms.json` to match it.
 
 ## 5. Safety, privacy and security
@@ -146,11 +151,18 @@ key, so everyone reads the colours the same way.
 | **Human in the loop** | The vitals nurse confirms every colour; lowering it needs a written reason. Staff make every prescription decision; the AI never suggests treatment. |
 | **No personal data to the AI** | Only symptoms, age, sex, pregnancy and chronic conditions are sent. A test enforces this. |
 | **Staff sign-in** | Personal staff ID + PIN. PINs are hashed (PBKDF2) and never stored as text. Weak PINs are refused. An account is **locked for 15 min after 5 wrong PINs**, and staff are **signed out after 30 min idle**. Roles limit stations and pages. |
+| **No guessing staff IDs** | Unknown, deactivated and real staff IDs get **exactly the same messages, lockout and response time**, so nobody can find out which IDs exist. One device is also stopped after 10 wrong sign-ins in 15 minutes, whichever IDs it tries. |
+| **Only you know your PIN** | A PIN set by an administrator (new account or reset) must be **changed at first sign-in**. Changing your own PIN needs the current one, with the same lockout. |
+| **Access ends immediately** | The account is re-checked on every page: a deactivated staff member is signed out at once, and a changed role applies at once. |
+| **No open setup** | On a real install, creating the first administrator needs a one-time **setup code** from the installer (`CLINICQ_SETUP_CODE`). Demo accounts, demo patients and "Reset" only exist in **demo mode** (`CLINICQ_DEMO_MODE=1`). |
 | **Masked on screens** | Dashboards show `*********0087` and `082***4567`. Addresses and next of kin only appear in Patient Records. |
 | **HIV results** | Need-to-know only: nurses, doctors and HIV counsellors. Never in the Audit Log, CSV exports or SMS. |
-| **SMS** | Queue number and room only – never the station (e.g. "HIV testing") or any health information. Next of kin are never told about a death by SMS. |
+| **SMS & waiting-room screen** | Queue number and **door number** only – never the station, a room name such as "HIV Counselling Room", or any health information. Next of kin are never told about a death by SMS. |
 | **One patient per room** | Enforced in the database, so two staff can never call the same patient or share a room. |
-| **Accountability** | Every action is logged with the staff member's name and ID. |
+| **Accountability** | Every action is logged with the staff member's name and ID, including who registered each visit and every folder search. |
+| **Audit log cannot be changed** | The database refuses to change or delete audit entries (even "Reset demo" keeps them). Each entry also carries a **SHA-256 hash chain**, so a change made directly in the database file is detected and shown on the Audit Log page. |
+| **Safe exports & display** | Only the facility manager and admin can bulk-export records. Exports neutralise spreadsheet formulas (CSV injection). Text typed by patients or written by the AI is escaped, so it can never become a link or image on staff screens. Error details are never shown in the browser. |
+| **Backups** | `python -m core.backup` makes **encrypted** snapshots (unreadable without the key), keeps the last 30, verifies them (including the audit hash chain) and restores to a new file only. |
 
 See [RESPONSIBLE_AI.md](RESPONSIBLE_AI.md) for the risks (under-triage, mistranslation, bias, privacy) and how
 each one is addressed.
@@ -199,6 +211,8 @@ clinicq/
   views/4_Alerts.py              Ambulance, hospital and death alerts / tasks
   views/5_Patient_Records.py     Patient database (role-protected, every view logged) + CSV export
   views/6_Staff.py               Change my PIN; admin: staff accounts, demo accounts, free rooms
+  views/7_Waiting_Room.py        TV screen: queue numbers and door numbers being called
+  views/8_Reports.py             Daily report for the facility manager
   core/models.py                 Pydantic models (intake, vitals, LLM output) + urgency ordering
   core/rules_engine.py           Red-flag rules (raise-only)
   core/llm_client.py             AI providers: mock / anthropic / gemini / groq
@@ -208,20 +222,24 @@ clinicq/
   core/workflow.py               Vitals, prescription, HIV test, room-to-room, referral, death + alerts
   core/queue_manager.py          Per-station queues, overdue rules, calling, SMS triggers
   core/rooms.py                  Named rooms, which are free, room reservations
-  core/auth.py                   Staff accounts, PIN hashing, lockout, roles
-  core/auth_ui.py                Sign-in screen, role check, inactivity sign-out
-  core/database.py               SQLite: patients, alerts, audit log, records search
+  core/auth.py                   Staff accounts, PIN hashing, lockout (also for unknown IDs), roles, forced PIN change
+  core/auth_ui.py                Sign-in, setup code, live account check, forced PIN change, inactivity sign-out
+  core/settings.py               CLINICQ_DEMO_MODE and CLINICQ_SETUP_CODE
+  core/reports.py                The facility manager's daily report (numbers only)
+  core/backup.py                 Encrypted backups: create, verify, restore (python -m core.backup)
+  core/database.py               SQLite: patients & folders, alerts, append-only hash-chained audit log, search
   core/privacy.py                SA ID checks, ID/phone masking, ID removal from free text
   core/sms_service.py            Mock SMS + interface for a real gateway (Clickatell stub)
   core/demo.py                   Loads the 10 demo patients
   core/ui.py                     Design system: colours, colour key, headers, tiles, badges, disclaimer
   data/red_flags.json            Danger-sign phrases (English, isiZulu, Sesotho, Sepedi, Afrikaans)
-  data/rooms.json                The clinic's 14 rooms
+  data/rooms.json                The clinic's 14 rooms and their neutral door numbers
   data/contacts.json             Ambulance coordinator, facility manager, hospitals (placeholders)
   data/demo_staff.json           Demo staff accounts (classroom only)
   data/sample_patients.json      10 fictional demo patients in mixed languages
   prompts/triage_system_prompt.txt
-  tests/                         160 pytest tests
+  tests/                         225 pytest tests
+  deploy/                        Running ClinicQ on the clinic's own network (HTTPS, start-up, backups)
   .env.example  requirements.txt  pytest.ini  README.md  RESPONSIBLE_AI.md
 ```
 
@@ -254,9 +272,16 @@ pytest -v
 streamlit run app.py
 ```
 
-**First start:** open the **Staff Dashboard**. Because there are no staff accounts yet, it shows **First-time
-setup**. Either create your own administrator, or (for a classroom demo) click **Load demo staff accounts**. Then
-click **Load demo patients** on the Home page.
+**First start – classroom demo:** set `CLINICQ_DEMO_MODE=1` in `.env`. The demo staff accounts below are created
+automatically; sign in on any staff page, then click **Load demo patients** on the Home page.
+
+**First start – real clinic:** keep `CLINICQ_DEMO_MODE=0`, set a long random `CLINICQ_SETUP_CODE`, open the **Staff
+Dashboard** → **First-time setup**, enter the code and create the administrator. The administrator then adds every
+staff member, who must choose their own PIN at first sign-in. To run ClinicQ on the clinic's own network (no
+internet needed), follow [deploy/LOCAL_NETWORK_SETUP.md](deploy/LOCAL_NETWORK_SETUP.md).
+
+**Streamlit Community Cloud:** set the same values under *App settings → Secrets*, e.g. `CLINICQ_DEMO_MODE = "1"`
+for the public demo.
 
 ### Signing in – common messages
 
@@ -266,6 +291,10 @@ click **Load demo patients** on the Home page.
 | *Too many wrong PINs. This account is locked…* | 5 wrong PINs in a row. | Wait 15 minutes, or ask an Admin to **Unlock** it on the Staff page. |
 | *Your role (…) does not have access to this page.* | The page is not part of that role's work (e.g. a pharmacist on Patient Records). | Use a page your role can open (see the table above). |
 | *You were signed out: no activity for 30 minutes.* | Automatic sign-out on shared computers; your room is freed. | Sign in again and choose a room. |
+| *Please choose your own PIN* | An administrator set your PIN (new account or reset). | Enter that PIN as "current", then your own new PIN. |
+| *You were signed out: this account has been deactivated.* | An administrator deactivated the account. | Ask the administrator. |
+| *Too many wrong sign-ins from this device.* | 10 wrong sign-ins from this browser in 15 minutes. | Wait 15 minutes. |
+| *First-time setup is locked* | No staff accounts yet, and no setup code is configured. | Set `CLINICQ_SETUP_CODE` (real clinic) or `CLINICQ_DEMO_MODE=1` (classroom demo) and reload. |
 | *No free room for this station* | All rooms for that station are in use. | Wait for a colleague to finish, or ask an Admin to free a stuck room. |
 
 ### Settings (`.env`)
@@ -278,6 +307,9 @@ click **Load demo patients** on the Home page.
 | `GROQ_API_KEY` / `GROQ_MODEL` | – / `llama-3.3-70b-versatile` | Groq (free tier) |
 | `SMS_PROVIDER` | `mock` | `mock` writes to `data/sms_outbox.log`; `clickatell` is a stub |
 | `CLINICQ_SESSION_MINUTES` | `30` | Minutes of inactivity before staff are signed out and rooms are freed |
+| `CLINICQ_DEMO_MODE` | `0` | `1` = classroom demo (demo accounts with public PINs, demo patients, reset). **Never** for a real clinic |
+| `CLINICQ_SETUP_CODE` | – | One-time code needed to create the first administrator on a real install |
+| `CLINICQ_BACKUP_KEY` | – | Key for encrypted backups (`python -m core.backup new-key`) |
 
 Restart `streamlit run app.py` after changing `.env`.
 
@@ -293,8 +325,10 @@ to YELLOW – manual review. The sidebar shows which provider is active.
 
 ### Demo staff accounts (classroom only – the PINs are public)
 
-**18 accounts:** 5 nurses, 2 doctors, 4 pharmacists, 2 HIV counsellors, 3 ambulance coordinators, 1 facility manager
-and 1 admin. Different people can work in different rooms at the same time. There are **2 pharmacy counters**, so
+Only available in **demo mode** (`CLINICQ_DEMO_MODE=1`).
+
+**20 accounts:** 5 nurses, 2 doctors, 4 pharmacists, 2 HIV counsellors, 3 ambulance coordinators, 1 facility manager,
+2 registration clerks and 1 admin. Different people can work in different rooms at the same time. There are **2 pharmacy counters**, so
 2 pharmacists can be signed in to the pharmacy at once; add counters in `data/rooms.json` for more.
 
 | Staff ID | Name                | Role                  | PIN    |
@@ -316,6 +350,8 @@ and 1 admin. Different people can work in different rooms at the same time. Ther
 | `A5002`  | Coordinator Mabuza  | Ambulance coordinator | `2783` |
 | `A5003`  | Coordinator Daniels | Ambulance coordinator | `8516` |
 | `M6001`  | Manager Mahlaba     | Facility manager      | `8462` |
+| `R5001`  | Ms Nkosi            | Registration clerk    | `3958` |
+| `R5002`  | Mr Botha            | Registration clerk    | `6403` |
 | `ADMIN`  | Clinic Admin        | Admin                 | `9045` |
 
 Every person has their **own** staff ID and PIN – use the ID and PIN from the same row (e.g. Pharmacist Botha is
@@ -344,22 +380,22 @@ Vitals queue. Their document numbers are clearly fake (`DEMO…`) or "No documen
 ### 5-minute demo script
 Use a separate browser window (or a private window) for each staff member, so each has their own sign-in.
 
-1. **Home** – explain the problem, then click **Load demo patients**. Point out the live tiles and the **colour key** (what RED, ORANGE, YELLOW and GREEN mean and how soon each must be seen), then the journey.
-2. **Patient Intake** – register someone in isiZulu or Sepedi (e.g. *"Ke palelwa ke go hema gabotse"*). Show the ticket and the staff view: the **rules caught the danger sign**.
-3. **Sr Dlamini (N1001)** – Staff Dashboard → Vitals → *Vitals Room 1*. Call the RED patient at the top, enter a temperature of **39.5 °C**, and add a note → the colour rises; send to the Nurse/Doctor.
+1. **Home** – explain the problem; sign in on any staff page, then click **Load demo patients**. Point out the live tiles and the **colour key** (what RED, ORANGE, YELLOW and GREEN mean and how soon each must be seen), then the journey.
+2. **Ms Nkosi (R5001)** – **Patient Intake**: search "Mokoena" to show the **folder search**, then register a new patient in isiZulu or Sepedi (e.g. *"Ke palelwa ke go hema gabotse"*). Show the ticket with the **folder number** and the staff view: the **rules caught the danger sign**. Open the **Waiting Room screen** on a second screen.
+3. **Sr Dlamini (N1001)** – Staff Dashboard → Vitals → *Vitals Room 1*. Call the RED patient at the top (the waiting-room screen shows the number and "Room 1"), enter the vitals – e.g. a temperature of **39.5 °C**, or a fast respiratory rate for the **TEWS score** – and add a note → the colour rises; send to the Nurse/Doctor.
 4. **Dr Naidoo (D2001)** – Nurse/Doctor → *Consultation Room 1*. Show the **vitals note**, write a prescription, and tick **HIV testing, Injection and Pharmacy**.
 5. **Counsellor Zulu (C4001)** – HIV testing → *HIV Counselling Room 1*. Record consent and a **positive** result. Show that "continue" is refused, and send the patient **back to the Nurse/Doctor**.
 6. **Dr Mthembu (D2002)** – sees the HIV result, records ART initiation; the injection and pharmacy rooms are still ticked.
 7. **Sr Khumalo (N1003)** → *Injection Room*, then **Pharmacist Botha (P3001)** → *Pharmacy Counter 1*. Show the route on each card, and that the **pharmacist cannot see the HIV result** → patient goes home.
 8. **Emergency** – as Dr Naidoo, **Refer to hospital** another patient. Then as **Coordinator Sibiya (A5001)** on **Alerts**, enter an ambulance reference → the hospital is alerted.
-9. **Manager Mahlaba (M6001)** – **Patient Records** (HIV result shows as 🔒 Restricted) and the **Audit Log** (every step with a name).
+9. **Manager Mahlaba (M6001)** – **Patient Records** (HIV result shows as 🔒 Restricted), **Reports** (waiting times and nurse colour changes per language) and the **Audit Log** (every step with a name, and the green *audit log intact* check).
 
 ## 9. Tests
 
 ```powershell
 pytest -v
 ```
-The 160 tests check, among other things, that:
+The 225 tests check, among other things, that:
 - **red-flag rules can never be downgraded by the AI** (every rules × AI combination), and invalid AI output falls back safely to YELLOW;
 - danger signs are caught in all 5 languages, and pregnancy and child rules only apply when relevant;
 - **names, ID numbers, addresses and phone numbers are never sent to the AI**;
@@ -367,9 +403,17 @@ The 160 tests check, among other things, that:
 - dangerous vitals raise the colour, lowering it needs a reason, and a positive pregnancy test re-checks pregnancy danger signs;
 - referred rooms always follow **HIV testing → injection → pharmacy**; HIV testing needs consent; a positive result must return to the Nurse/Doctor; HIV results are hidden from non-clinical roles and never appear in the audit log or exports;
 - PINs are hashed, weak PINs are refused, accounts lock after 5 wrong PINs, and roles limit stations and pages;
+- **real and unknown staff IDs cannot be told apart**, administrator-set PINs must be changed, a deactivated account loses access at once, and only managers and admins can export;
+- the **audit log cannot be changed or deleted**, and tampering with the file is detected by the hash chain;
+- exports neutralise spreadsheet formulas, and patient text can never become a link or image on screen;
+- returning patients keep their folder, nobody can be registered twice, and queue numbers restart each day;
+- clear English negations ("no chest pain") do not raise the colour, while anything unclear still does;
+- SpO₂, glucose, AVPU and the adult TEWS score raise the colour, and children's weight is required;
+- the daily report counts waits and nurse colour changes per language, without names;
+- backups are unreadable without the key, complete, and never overwrite a live database;
 - only free rooms for the station are offered, two staff can never take the same room or call the same patient, and room names are kept exactly;
 - hospital referral alerts the ambulance coordinator, then the hospital; a death alerts the facility manager; **next of kin never get an SMS**;
-- SMS texts never name the station; queue order, overdue rules and the audit log all work.
+- SMS texts never name the station or the room's purpose (only its door number); queue order, overdue rules and the audit log all work.
 
 ## 10. Screenshots
 
@@ -391,7 +435,7 @@ The 160 tests check, among other things, that:
 - **Fingerprint sign-in** with WebAuthn / passkeys (Windows Hello or a phone's fingerprint sensor). The fingerprint is checked on the device and never stored by ClinicQ, which is the POPIA-safe way to use biometrics.
 - **Before real use:**
   - connect sign-in to the department's staff directory;
-  - **encrypt the database**;
+  - run on the clinic's own network with an encrypted disk and daily encrypted backups ([guide](deploy/LOCAL_NETWORK_SETUP.md)), or move to an encrypted database server;
   - use a secure channel for hospital handovers;
   - apply POPIA data-retention rules;
   - have the clinical team approve the vital-sign thresholds and the non-English phrase lists.
@@ -399,7 +443,8 @@ The 160 tests check, among other things, that:
 - **WhatsApp intake**, so patients can describe their symptoms before they arrive.
 - **Voice input** in all five languages, for patients who cannot read or write.
 - **More languages:** isiXhosa, Setswana, Xitsonga, Tshivenda…
-- **SpO₂ and respiratory rate** at vitals, and the full SATS TEWS score.
+- **Paediatric TEWS** charts for children 12 and under (the adult TEWS is calculated now).
+- **Negation in all five languages**, written with native-speaking nurses (English only for now).
 - **ML urgency model** trained on nurse-confirmed triage outcomes (the audit log already collects them), checked for bias across languages, ages and sexes.
 - **Integration** with the national patient registration system and electronic referral letters.
 

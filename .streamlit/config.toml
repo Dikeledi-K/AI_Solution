@@ -12,3 +12,15 @@ font = "sans serif"
 
 [client]
 toolbarMode = "minimal"
+# Security: never show code tracebacks (file paths, internal details) to people in the clinic.
+showErrorDetails = "type"
+
+[server]
+# Security: reject forged requests from other websites (on by default; stated so nobody turns it off).
+enableXsrfProtection = true
+# ClinicQ has no file uploads; keep the limit small.
+maxUploadSize = 5
+
+[browser]
+# Privacy: do not send usage statistics to Streamlit.
+gatherUsageStats = false

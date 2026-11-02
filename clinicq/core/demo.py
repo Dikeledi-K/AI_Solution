@@ -32,7 +32,10 @@ def load_demo_patients(sms: SMSService, client: LLMClient | None = None) -> int:
         intake = PatientIntake(**case["intake"])
         triage = run_triage(intake, client=client)
         arrival = (now - timedelta(minutes=case["minutes_ago"])).isoformat(timespec="seconds")
-        db.add_patient(intake, triage, arrival_time=arrival)
+        try:
+            db.add_patient(intake, triage, arrival_time=arrival, registered_by="Demo loader")
+        except db.AlreadyInClinic:
+            continue  # this demo patient is still in the clinic from an earlier load
         count += 1
     notify_near_front(sms)
     return count

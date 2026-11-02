@@ -99,7 +99,7 @@ def test_roles_limit_stations_and_pages():
 
 
 def test_demo_staff_load_once():
-    assert auth.load_demo_staff() == 18  # 5 nurses, 2 doctors, 4 pharmacists, 2 counsellors, 3 coordinators ...
+    assert auth.load_demo_staff() == 20  # 5 nurses, 2 doctors, 4 pharmacists, 2 counsellors, 3 coordinators, 2 clerks ...
     assert auth.load_demo_staff() == 0
     assert auth.authenticate("D2001", "7391")["role"] == "Doctor"
 

@@ -25,7 +25,7 @@ from core.queue_manager import effective_urgency, notify_near_front
 from core.rules_engine import check_red_flags_for
 from core.sms_service import SMSService
 from core.stations import AFTER_CLINICIAN, STATIONS
-from core.vitals import check_vitals, flags_urgency
+from core.vitals import check_vitals, flags_urgency, tews_score, vitals_text
 
 CONTACTS_PATH = Path(__file__).resolve().parent.parent / "data" / "contacts.json"
 
@@ -50,7 +50,7 @@ def suggest_after_vitals(patient: dict, vitals: Vitals) -> tuple[Urgency, list, 
     Returns (suggested colour, vitals flags, pregnant?).
     """
     pregnant = patient["pregnant"] == "Yes" or vitals.urine_pregnancy == "Positive"
-    flags = check_vitals(vitals, pregnant)
+    flags = check_vitals(vitals, pregnant, patient["age"])
     suggested = effective_urgency(patient)
     for level in (flags_urgency(flags),
                   check_red_flags_for(patient["symptoms_text"], patient["age"], pregnant).urgency):
@@ -69,14 +69,18 @@ def record_vitals(patient_id: int, vitals: Vitals, staff: str, sms: SMSService,
     note   = the vitals nurse's note for the Nurse/Doctor who will prescribe.
     """
     patient = db.get_patient(patient_id)
+    if patient["age"] <= 12 and vitals.weight_kg is None:
+        raise ValueError("Please record the child's weight – it is needed for medicine doses.")
     suggested, flags, pregnant = suggest_after_vitals(patient, vitals)
     final = chosen or suggested
     if final.rank < suggested.rank and not (reason or "").strip():
         raise ValueError(f"Please give a reason for choosing {final.value} when {suggested.value} "
                          "is suggested.")
 
+    tews = tews_score(vitals, patient["age"])
     record = vitals.model_dump() | {"flags": [f.model_dump(mode="json") for f in flags],
-                                    "suggested": suggested.value, "note": note.strip()}
+                                    "suggested": suggested.value, "note": note.strip(),
+                                    "tews": tews["score"] if tews else None}
     newly_pregnant = "Yes" if vitals.urine_pregnancy == "Positive" else None
     summary = vitals.summary() + (f". Note: {note.strip()}" if note.strip() else "")
     db.save_vitals(patient_id, json.dumps(record), staff, newly_pregnant, summary)
@@ -210,12 +214,11 @@ def referral_summary(patient: dict, reference: str, eta_minutes: int) -> str:
     """Handover note for the receiving hospital."""
     details = json.loads(patient["outcome_details"] or "{}")
     vitals = json.loads(patient["vitals_json"]) if patient.get("vitals_json") else None
-    vitals_text = (f"BP {vitals['bp_systolic']}/{vitals['bp_diastolic']}, temp {vitals['temperature']}°C"
-                   + (f", pulse {vitals['pulse']}" if vitals.get("pulse") else "")) if vitals else "not taken"
+    vitals_line = vitals_text(vitals) if vitals else "not taken"
     return (
         f"Incoming patient: {_name(patient)}, {patient['age']}y {patient['sex']}, "
         f"ID {mask_id(patient.get('id_number'))}. Triage: {effective_urgency(patient).value}. "
-        f"Complaint: {patient['chief_complaint']}. Vitals: {vitals_text}. "
+        f"Complaint: {patient['chief_complaint']}. Vitals: {vitals_line}. "
         f"Clinic notes: {patient.get('clinician_notes') or '—'}. Reason for referral: "
         f"{details.get('reason', '—')}. Referred by {details.get('referred_by', '—')}. "
         f"Ambulance ref {reference}, ETA about {eta_minutes} min."

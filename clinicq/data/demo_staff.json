@@ -104,6 +104,18 @@
       "pin": "8462"
     },
     {
+      "staff_id": "R5001",
+      "full_name": "Ms Nkosi",
+      "role": "Registration clerk",
+      "pin": "3958"
+    },
+    {
+      "staff_id": "R5002",
+      "full_name": "Mr Botha",
+      "role": "Registration clerk",
+      "pin": "6403"
+    },
+    {
       "staff_id": "ADMIN",
       "full_name": "Clinic Admin",
       "role": "Admin",

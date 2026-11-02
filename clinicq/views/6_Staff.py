@@ -2,6 +2,9 @@
 
     Everyone signed in: change their own PIN.
     Admin only:         add staff, reset a PIN, unlock, activate / deactivate.
+
+A PIN chosen by an administrator (new account or reset) must be changed by the
+staff member at their next sign-in, so nobody else knows their working PIN.
 """
 
 from html import escape
@@ -10,7 +13,8 @@ import streamlit as st
 
 from core import auth
 from core import rooms
-from core.auth_ui import require_staff
+from core.auth_ui import pin_form, require_staff
+from core.settings import demo_mode
 from core.stations import label
 from core.ui import hero, page_setup, section, tile, tiles
 
@@ -23,22 +27,7 @@ ME = auth.staff_label(me)
 # My account
 # ---------------------------------------------------------------------------
 section("🔑 My PIN")
-with st.form("my_pin"):
-    c1, c2, c3 = st.columns(3)
-    current = c1.text_input("Current PIN *", type="password")
-    new = c2.text_input("New PIN (4–8 digits) *", type="password")
-    again = c3.text_input("Repeat new PIN *", type="password")
-    if st.form_submit_button("Change my PIN", type="primary"):
-        if not auth.verify_pin(current, auth.get_staff(me["staff_id"])["pin_hash"]):
-            st.error("Your current PIN is wrong.")
-        elif new != again:
-            st.error("The new PINs do not match.")
-        else:
-            try:
-                auth.set_pin(me["staff_id"], new, ME)
-                st.success("PIN changed.")
-            except ValueError as e:
-                st.error(str(e))
+pin_form(me)
 
 if not auth.can_open(me["role"], "staff_admin"):
     st.caption("Only an Admin can add staff or reset other people's PINs.")
@@ -59,6 +48,7 @@ st.dataframe(
       "Stations": ", ".join(label(x) for x in auth.allowed_stations(s["role"])) or "— (alerts only)",
       "Active": "Yes" if s["active"] else "No",
       "Locked until": (s["locked_until"] or "")[11:16],
+      "Must change PIN": "Yes" if s.get("must_change_pin") else "",
       "Last sign-in": (s["last_login"] or "")[:16].replace("T", " ")} for s in staff],
     width="stretch", hide_index=True,
 )
@@ -66,7 +56,7 @@ st.dataframe(
 c1, c2 = st.columns(2)
 with c1:
     section("➕ Add a staff member")
-    if st.button("👥 Add any missing demo staff accounts (classroom only)"):
+    if demo_mode() and st.button("👥 Add any missing demo staff accounts (classroom only)"):
         n = auth.load_demo_staff()
         st.success(f"{n} demo account(s) added." if n else "All demo accounts already exist.")
         st.rerun()
@@ -77,11 +67,12 @@ with c1:
         role = st.selectbox("Role *", list(auth.ROLES),
                             help="The role decides which stations and pages this person can use.")
         pin = st.text_input("First PIN (4–8 digits) *", type="password",
-                            help="Give it to the person privately and ask them to change it on this page.")
+                            help="Give it to the person privately. They must choose their own PIN when "
+                                 "they first sign in.")
         if st.form_submit_button("Add staff member", type="primary"):
             try:
-                new_id = auth.add_staff(staff_id, name, role, pin, created_by=ME)
-                st.success(f"Added {new_id}.")
+                new_id = auth.add_staff(staff_id, name, role, pin, created_by=ME, must_change_pin=True)
+                st.success(f"Added {new_id}. They will choose their own PIN at first sign-in.")
                 st.rerun()
             except ValueError as e:
                 st.error(str(e))
@@ -96,8 +87,9 @@ with c2:
             new_pin = st.text_input("New PIN *", type="password")
             if st.form_submit_button("Reset PIN"):
                 try:
-                    auth.set_pin(chosen, new_pin, ME)
-                    st.success(f"PIN reset for {escape(chosen)}. Give it to them privately.")
+                    auth.set_pin(chosen, new_pin, ME, must_change=True)
+                    st.success(f"PIN reset for {escape(chosen)}. Give it to them privately – they must "
+                               "change it when they next sign in.")
                 except ValueError as e:
                     st.error(str(e))
         b1, b2 = st.columns(2)

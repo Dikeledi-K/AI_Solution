@@ -1,0 +1,19 @@
+# Caddy reverse proxy: gives ClinicQ HTTPS on the clinic's own network.
+# Tablets connect to https://clinicq.lan (or the server's fixed IP address); PINs and patient
+# details are encrypted over Wi-Fi. ClinicQ itself only listens on 127.0.0.1:8501.
+#
+# "tls internal" makes Caddy create its own local certificate authority. Install Caddy's root
+# certificate on every tablet once (see LOCAL_NETWORK_SETUP.md, step 5).
+#
+# Change 192.168.1.10 to the server's fixed IP address.
+
+clinicq.lan, 192.168.1.10 {
+	tls internal
+	reverse_proxy 127.0.0.1:8501
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+}

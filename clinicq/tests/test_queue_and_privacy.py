@@ -225,7 +225,9 @@ def test_different_rooms_can_each_call_one_patient(make_intake, tmp_path):
     call_patient(b, sms, room="Consultation Room 2")
     with pytest.raises(RoomBusyError):
         call_patient(c, sms, room="Consultation Room 2")
-    assert any("Consultation Room 2" in m for m in sms.recent_messages())
+    # Patients are told the neutral door number of Consultation Room 2, not its internal name.
+    assert any("please come to Room 4 now" in m for m in sms.recent_messages())
+    assert not any("Consultation" in m for m in sms.recent_messages())
 
 
 def test_room_names_are_kept_exactly(make_intake, tmp_path):
@@ -302,7 +304,14 @@ def test_staff_events_have_no_patient():
 def test_old_audit_entries_get_the_patient_name_but_not_a_guessed_colour(make_intake):
     pid = add(make_intake, "I need my repeat medication", "2026-01-01T08:00:00", first_name="Busi",
               surname="Mokoena")
-    with db.get_connection() as conn:  # an entry written before patient names were stored
+    # Turn the audit log back into the oldest format (no patient_name, no hash chain),
+    # holding one entry written before patient names were stored.
+    with db.get_connection() as conn:
+        conn.executescript("""
+            DROP TRIGGER audit_log_no_update; DROP TRIGGER audit_log_no_delete; DROP TABLE audit_log;
+            CREATE TABLE audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL,
+                event_type TEXT NOT NULL, patient_id INTEGER, queue_number INTEGER, input_text TEXT,
+                rules_result TEXT, ai_output TEXT, final_urgency TEXT, nurse_action TEXT, details TEXT);""")
         conn.execute("INSERT INTO audit_log (timestamp, event_type, patient_id) VALUES (?, 'SMS', ?)",
                      ("2026-01-01T08:01:00", pid))
     db.init_db()  # runs the migration
@@ -310,6 +319,9 @@ def test_old_audit_entries_get_the_patient_name_but_not_a_guessed_colour(make_in
     assert old["patient_name"] == "Busi Mokoena"
     assert old["nurse_action"] == "SMS sent (simulated)"
     assert old["final_urgency"] is None  # never invented after the fact
+    assert db.verify_audit_chain()["ok"]  # old entries are hashed into the chain too
+    db.add_audit("STAFF_LOGIN", nurse_action="after the migration")
+    assert db.verify_audit_chain() == {"ok": True, "entries": 2, "first_bad_id": None}
 
 
 def test_audit_csv_includes_patient_name(make_intake):

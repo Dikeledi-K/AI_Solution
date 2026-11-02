@@ -175,11 +175,23 @@ class PatientIntake(BaseModel):
 TestResult = Literal["Positive", "Negative", "Not done"]
 
 
+MOBILITY = ["Walking", "With help", "Stretcher / immobile"]
+AVPU = ["Alert", "Confused", "Reacts to voice", "Reacts to pain", "Unresponsive"]
+
+
 class Vitals(BaseModel):
     bp_systolic: int = Field(ge=50, le=260, description="mmHg")
     bp_diastolic: int = Field(ge=30, le=160, description="mmHg")
     temperature: float = Field(ge=30.0, le=44.0, description="°C")
     pulse: Optional[int] = Field(default=None, ge=20, le=250, description="beats per minute")
+    resp_rate: Optional[int] = Field(default=None, ge=4, le=80, description="breaths per minute")
+    spo2: Optional[int] = Field(default=None, ge=50, le=100, description="oxygen saturation %")
+    weight_kg: Optional[float] = Field(default=None, ge=0.5, le=300, description="kg")
+    glucose: Optional[float] = Field(default=None, ge=0.5, le=40.0, description="blood glucose mmol/L")
+    # The remaining parts of the adult SATS TEWS score
+    mobility: Optional[Literal["Walking", "With help", "Stretcher / immobile"]] = None
+    avpu: Optional[Literal["Alert", "Confused", "Reacts to voice", "Reacts to pain", "Unresponsive"]] = None
+    trauma: Optional[bool] = None
     urine_infection: TestResult = "Not done"   # urine dipstick: leucocytes / nitrites
     urine_pregnancy: Literal["Positive", "Negative", "Not done", "Not applicable"] = "Not applicable"
 
@@ -190,8 +202,18 @@ class Vitals(BaseModel):
         return self
 
     def summary(self) -> str:
-        pulse = f", pulse {self.pulse}" if self.pulse else ""
-        return (f"BP {self.bp_systolic}/{self.bp_diastolic}, temp {self.temperature:.1f}°C{pulse}; "
+        extra = [
+            f"pulse {self.pulse}" if self.pulse else None,
+            f"resp {self.resp_rate}/min" if self.resp_rate else None,
+            f"SpO2 {self.spo2}%" if self.spo2 else None,
+            f"glucose {self.glucose:.1f} mmol/L" if self.glucose else None,
+            f"weight {self.weight_kg:g} kg" if self.weight_kg else None,
+            self.avpu if self.avpu and self.avpu != "Alert" else None,
+            f"mobility: {self.mobility}" if self.mobility and self.mobility != "Walking" else None,
+            "trauma" if self.trauma else None,
+        ]
+        extra_text = "".join(f", {e}" for e in extra if e)
+        return (f"BP {self.bp_systolic}/{self.bp_diastolic}, temp {self.temperature:.1f}°C{extra_text}; "
                 f"urine infection: {self.urine_infection}; pregnancy test: {self.urine_pregnancy}")
 
 
@@ -214,6 +236,9 @@ class RuleMatch(BaseModel):
 class RulesResult(BaseModel):
     matches: list[RuleMatch] = Field(default_factory=list)
     urgency: Optional[Urgency] = None  # None = no red flag found
+    # Danger signs the patient mentioned only with a negation ("no chest pain"). They do
+    # not raise the colour, but are shown to the nurse to check.
+    negated: list[RuleMatch] = Field(default_factory=list)
 
     @property
     def triggered(self) -> bool:
@@ -277,6 +302,9 @@ class TriageResult(BaseModel):
         parts = []
         if self.rules_result.triggered:
             parts.append(self.rules_result.summary())
+        if self.rules_result.negated:
+            names = ", ".join(sorted({m.rule_name for m in self.rules_result.negated}))
+            parts.append(f"Mentioned as absent (check with the patient): {names}.")
         if self.llm_output:
             parts.append(f"AI: {self.llm_output.reasoning}")
         else:

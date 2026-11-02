@@ -5,7 +5,7 @@ import json
 import pytest
 
 from core.models import Urgency
-from core.rules_engine import check_red_flags, load_rules, normalise_text
+from core.rules_engine import check_red_flags, check_red_flags_for, load_rules, normalise_text
 
 
 @pytest.mark.parametrize(
@@ -104,3 +104,46 @@ def test_loader_rejects_rules_that_would_lower_urgency(tmp_path):
 
 def test_normalise_text():
     assert normalise_text("  Can't   BREATHE!! ") == "cant breathe"
+
+
+# ---------------------------------------------------------------------------
+# Negation: clear English negations do not raise the colour; anything unclear still does
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("text", [
+    "I have no chest pain, just a cough",
+    "She denies any chest pain",
+    "I don't have chest pain",
+    "Without any real chest pain",
+])
+def test_clearly_negated_danger_sign_does_not_raise_but_is_shown(text):
+    result = check_red_flags_for(text, 35, False)
+    assert result.urgency is None
+    assert [m.rule_id for m in result.negated] == ["chest_pain"]
+
+
+@pytest.mark.parametrize("text", [
+    "No. Chest pain since this morning",           # the "no" answers something else
+    "No fever but chest pain",                     # a new clause
+    "No fever and chest pain",
+    "No fever or chest pain",                      # unclear: safe side
+    "I am not well, chest pain",
+    "I do not know why I have chest pain",         # negation too far away
+    "Not only chest pain but also a cough",
+    "No chest pain earlier. Chest pain now",       # mentioned again without negation
+])
+def test_unclear_or_partial_negation_still_fires(text):
+    assert check_red_flags_for(text, 35, False).urgency == Urgency.RED
+
+
+def test_negation_never_switches_off_danger_signs_that_are_negative_phrases():
+    # "not drinking" IS the danger sign for a small child
+    assert check_red_flags_for("My baby is not drinking", 1, False).urgency == Urgency.RED
+    assert check_red_flags_for("He cannot breathe", 40, False).urgency == Urgency.RED
+
+
+def test_negation_is_english_only_until_reviewed_by_native_speakers():
+    # isiZulu chest pain is still caught even if English "no chest pain" is also written
+    result = check_red_flags_for("Isifuba sibuhlungu, no chest pain", 35, False)
+    assert result.urgency == Urgency.RED

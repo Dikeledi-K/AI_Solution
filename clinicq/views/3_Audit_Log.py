@@ -19,6 +19,16 @@ hero("Audit Log", "Every decision, action, alert and record view – with timest
 
 all_rows = db.get_audit_log()
 
+# Tamper check: every entry's hash includes the one before it, so an entry changed or
+# removed directly in the database file breaks the chain from that point on.
+chain = db.verify_audit_chain()
+if chain["ok"]:
+    st.success(f"🔒 Audit log intact – all {chain['entries']} entries verified. Entries cannot be changed "
+               "or deleted, and any change made directly in the database file would show here.")
+else:
+    st.error(f"⚠️ Audit log integrity check FAILED at entry {chain['first_bad_id']}. An entry was changed or "
+             "removed outside ClinicQ. Report this to the facility manager and information officer.")
+
 # Plain-English names for the event codes.
 EVENT_NAMES = {
     "TRIAGE": "Registered & triaged", "NURSE_CONFIRM": "Colour confirmed", "NURSE_OVERRIDE": "Colour changed",
@@ -27,8 +37,9 @@ EVENT_NAMES = {
     "REFERRED": "Hospital referral", "DECEASED": "Death recorded", "ALERT": "Alert",
     "ROOM": "Room", "STAFF_LOGIN": "Sign-in", "STAFF_ADMIN": "Staff admin", "RECORD_VIEW": "Record viewed",
     "RECORDS_ACCESS": "Records access", "EXPORT": "Export", "RESET": "Data reset",
+    "RECORD_LOOKUP": "Folder looked up", "DEMO": "Demo data", "BACKUP": "Backup",
 }
-STAFF_EVENTS = {"ROOM", "STAFF_LOGIN", "STAFF_ADMIN", "RECORDS_ACCESS", "EXPORT", "RESET"}
+STAFF_EVENTS = {"ROOM", "STAFF_LOGIN", "STAFF_ADMIN", "RECORDS_ACCESS", "EXPORT", "RESET", "DEMO", "BACKUP"}
 
 
 def count(*events: str) -> int:
@@ -80,7 +91,8 @@ def readable_details(r: dict) -> str:
         arrival = parts.get("arrival", "")
         staff_note = " (time entered by staff)" if "entered by staff" in arrival else ""
         return (f"Colour decided by: {parts.get('decided_by', '—')} · AI used: {parts.get('provider', '—')}"
-                f" ({parts.get('attempts', '?')} attempt(s)) · arrived {arrival[11:16]}{staff_note}")
+                f" ({parts.get('attempts', '?')} attempt(s)) · arrived {arrival[11:16]}{staff_note}"
+                + (f" · folder {parts['folder']}" if parts.get("folder") else ""))
     return text or "—"
 
 
@@ -103,7 +115,8 @@ EVENT_COLOURS = {
     "Assessed / prescribed": "#dbeafe", "Sent to next room": "#e0e7ff", "Hospital referral": "#fee2e2",
     "Death recorded": "#e2e8f0", "Alert": "#ffe4e6", "Record viewed": "#f1f5f9", "Export": "#fef3c7",
     "Records access": "#f1f5f9", "Sign-in": "#f1f5f9", "Room": "#f0fdfa", "HIV test": "#fdf2f8",
-    "Staff admin": "#f1f5f9", "Data reset": "#fee2e2",
+    "Staff admin": "#f1f5f9", "Data reset": "#fee2e2", "Folder looked up": "#f1f5f9", "Demo data": "#fef3c7",
+    "Backup": "#f0fdfa",
 }
 
 

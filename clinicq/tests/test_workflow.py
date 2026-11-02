@@ -189,6 +189,17 @@ def test_called_sms_never_names_the_station(make_intake, sms):
     assert not any("HIV" in m for m in sms.recent_messages(50))
 
 
+def test_called_sms_uses_the_neutral_door_number_not_the_room_name(make_intake, sms):
+    """The room is really called "HIV Counselling Room 1"; the SMS must only say "Room 12"."""
+    pid = register(make_intake, phone="0821234567")
+    record_vitals(pid, Vitals(**NORMAL), "Sr Dlamini", sms)
+    complete_clinician(pid, "Test", ["HIV_TEST"], "Dr Naidoo", sms)
+    call_patient(pid, sms, room="HIV Counselling Room 1", staff="Counsellor Zulu")
+    called = [m for m in sms.recent_messages(50) if "please come to" in m]
+    assert called and "please come to Room 12 now" in called[-1]
+    assert not any("HIV" in m or "Counselling" in m for m in sms.recent_messages(50))
+
+
 # ---------------------------------------------------------------------------
 # Hospital referral
 # ---------------------------------------------------------------------------

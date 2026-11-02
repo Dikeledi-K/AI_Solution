@@ -10,6 +10,7 @@ from core.stations import STATIONS
 from core.sms_service import get_sms_service
 from core.auth import staff_label
 from core.auth_ui import current_staff
+from core.settings import demo_mode
 from core.ui import colour_key, hero, page_setup, section, tile, tiles
 
 page_setup("Home")
@@ -57,10 +58,11 @@ st.markdown(
 section("🧭 The patient journey")
 steps = [
     ("#7c3aed", "📝", "Register",
-     "Details, ID, next of kin, consent and symptoms in 5 languages. Red-flag rules, then AI, suggest a colour."),
+     "The clerk finds the patient's folder (or opens a new one), checks their details and types their symptoms "
+     "in any of 5 languages. Red-flag rules, then AI, suggest a colour."),
     ("#0d9488", "🩺", "Vitals & tests",
-     "BP, temperature, pulse, urine infection & pregnancy tests. Danger readings raise the colour. The nurse "
-     "confirms it and leaves a note."),
+     "BP, temperature, pulse, breathing, oxygen, glucose, weight, urine tests and the adult TEWS score. Danger "
+     "readings raise the colour. The nurse confirms it and leaves a note."),
     ("#2563eb", "👩‍⚕️", "Nurse / Doctor",
      "Reads the vitals note, prescribes, and ticks the rooms needed – or sends the patient home."),
     ("#db2777", "🧪", "HIV testing",
@@ -85,17 +87,20 @@ extras = [
      "Hospital referral alerts the ambulance coordinator, then the receiving hospital. A death alerts the "
      "facility manager, with tasks to certify, inform next of kin in person, and report to SAPS if needed."),
     ("#f57c00", "⏰", "Fair waiting",
-     "Most urgent first. SATS target times flag overdue patients; GREEN patients waiting over 4 h move up."),
+     "Most urgent first. SATS target times flag overdue patients; GREEN patients waiting over 4 h move up. "
+     "A waiting-room screen shows who is called and where."),
     ("#0891b2", "🚪", "Named rooms",
      "14 rooms – vitals, consultation, emergency, HIV counselling, injection, pharmacy. Staff pick a free room; "
      "one patient per room."),
     ("#4338ca", "🔐", "Secure sign-in",
-     "Personal staff ID + PIN, roles, lockout after 5 wrong PINs and automatic sign-out after 30 min."),
+     "Personal staff ID + PIN, roles, lockout after 5 wrong PINs, automatic sign-out after 30 min. Staff "
+     "choose their own PIN; a deactivated account loses access at once."),
     ("#be123c", "🔒", "Privacy",
-     "No personal details go to the AI. IDs and phones are masked. HIV results are need-to-know only. SMS "
-     "shows the room only."),
+     "No personal details go to the AI. IDs and phones are masked. HIV results are need-to-know only. SMS and "
+     "the waiting-room screen show a neutral door number only."),
     ("#334155", "🗂️", "Records & audit",
-     "Searchable patient records. Every decision, room, alert, sign-in and record view is logged with a name."),
+     "Patient folders with every visit. A tamper-evident audit log of every decision, sign-in and record view, "
+     "and a daily report for the facility manager."),
 ]
 cards = "".join(
     f"<div class='cq-card' style='--cq-accent:{colour}'><span style='font-size:1.4rem'>{icon}</span>"
@@ -107,13 +112,17 @@ st.markdown(f"<div class='cq-grid'>{cards}</div>", unsafe_allow_html=True)
 # --- Which page do I use? -------------------------------------------------------------
 section("🧑‍🤝‍🧑 Which page do I use?")
 guide = [
-    ("📝 Patient Intake", "Patients / clerk", "Register and get a queue number. No sign-in."),
+    ("📝 Patient Intake", "Registration clerks (also nurses, doctors)",
+     "Sign in, find the patient's folder or open a new one, register the visit and give the queue number."),
     ("🩺 Staff Dashboard", "Nurses, doctors, pharmacists, HIV counsellors",
      "Sign in, choose your station and a free room, call patients, record your part, send them on."),
     ("🚨 Alerts", "Ambulance coordinator, facility manager", "Ambulance, hospital and death follow-ups."),
-    ("🗂️ Patient Records", "Nurses, doctors, facility manager, admin", "Search visits and full details."),
-    ("📋 Audit Log", "Facility manager, admin", "Who did what, and when."),
+    ("🗂️ Patient Records", "Nurses, doctors, facility manager, admin",
+     "Search folders and visits. Only the facility manager and admin can export."),
+    ("📊 Reports", "Facility manager, admin", "Waiting times, outcomes and nurse colour changes per language."),
+    ("📋 Audit Log", "Facility manager, admin", "Who did what, and when – with a tamper check."),
     ("👥 Staff", "Everyone (own PIN) · admin", "Change your PIN; admins manage accounts and rooms."),
+    ("📺 Waiting Room screen", "The TV in the waiting area", "Queue numbers and door numbers being called. No sign-in."),
 ]
 rows = "".join(f"<tr><td><b>{page}</b></td><td>{who}</td><td>{what}</td></tr>" for page, who, what in guide)
 st.markdown("<div class='cq-card' style='--cq-accent:#7c3aed'><table class='cq-table'>"
@@ -122,30 +131,33 @@ st.markdown("<div class='cq-card' style='--cq-accent:#7c3aed'><table class='cq-t
 
 st.info("ClinicQ is a **decision-support** tool. It does not diagnose or prescribe – staff make every clinical decision. Personal details are never sent to the AI.")
 
-# --- Demo controls ------------------------------------------------------------
-section("🎬 Demo controls")
-with st.container(key="panel_demo"):
-    # A message saved before st.rerun() so it survives the refresh of the tiles above.
-    if "flash" in st.session_state:
-        st.success(st.session_state.pop("flash"))
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("👥 Load demo patients", type="primary", width="stretch"):
-            with st.spinner("Triaging 10 demo patients…"):
-                added = load_demo_patients(get_sms_service())
-            st.session_state["flash"] = (f"Added {added} demo patients. They are waiting for "
-                                         "**Vitals** – open the **Staff Dashboard** and sign in.")
-            st.rerun()
-    with col2:
+# --- Demo controls (classroom demo mode only) -----------------------------------
+if demo_mode():
+    section("🎬 Demo controls", "demo mode – fictional patients only")
+    with st.container(key="panel_demo"):
+        # A message saved before st.rerun() so it survives the refresh of the tiles above.
+        if "flash" in st.session_state:
+            st.success(st.session_state.pop("flash"))
         staff = current_staff()
         is_admin = bool(staff) and staff["role"] == "Admin"
-        if st.button("🗑️ Reset all data", width="stretch", disabled=not is_admin,
-                     help=None if is_admin else "Only a signed-in Admin can reset data."):
-            db.clear_all()
-            # Logged AFTER clearing, so the record of who reset the data is kept.
-            db.add_audit("RESET", nurse_action=f"All patient data deleted by {staff_label(staff)}")
-            sms = get_sms_service()
-            if hasattr(sms, "clear"):
-                sms.clear()
-            st.session_state["flash"] = "Queue, audit log and SMS outbox cleared."
-            st.rerun()
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("👥 Load demo patients", type="primary", width="stretch", disabled=not staff,
+                         help=None if staff else "Sign in on the Staff Dashboard first."):
+                with st.spinner("Triaging 10 demo patients…"):
+                    added = load_demo_patients(get_sms_service())
+                db.add_audit("DEMO", nurse_action=f"{added} demo patients loaded by {staff_label(staff)}")
+                st.session_state["flash"] = (f"Added {added} demo patients. They are waiting for "
+                                             "**Vitals** – open the **Staff Dashboard**.")
+                st.rerun()
+        with col2:
+            if st.button("🗑️ Reset demo patients", width="stretch", disabled=not is_admin,
+                         help="Clears patients, alerts and the SMS outbox. The audit log is always kept."
+                         if is_admin else "Only a signed-in Admin can reset the demo."):
+                db.clear_all()
+                db.add_audit("RESET", nurse_action=f"All demo patients and alerts deleted by {staff_label(staff)}")
+                sms = get_sms_service()
+                if hasattr(sms, "clear"):
+                    sms.clear()
+                st.session_state["flash"] = "Patients, alerts and SMS outbox cleared. The audit log was kept."
+                st.rerun()

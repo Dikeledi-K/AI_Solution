@@ -46,6 +46,18 @@ def load_rooms() -> list[dict]:
         return json.load(f)["rooms"]
 
 
+def door_name(room: str | None) -> str:
+    """The neutral number on the room's door ("Room 12") – the only room name patients see.
+
+    Internal names such as "HIV Counselling Room 1" reveal why a patient is there, so they
+    are never used in an SMS or on the waiting-room screen.
+    """
+    for i, r in enumerate(load_rooms()):
+        if r["name"] == room:
+            return r.get("door") or f"Room {i + 1}"
+    return room or "the room shown by staff"  # not a configured room (e.g. tests): used as written
+
+
 def room_names() -> list[str]:
     return [r["name"] for r in load_rooms()]
 

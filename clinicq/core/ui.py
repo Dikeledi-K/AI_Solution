@@ -9,12 +9,14 @@ Any text that comes from a patient or the AI is passed through html.escape()
 before it is put into HTML, so it can never inject markup into the page.
 """
 
+import re
 from html import escape
 
 import streamlit as st
 
 from core.database import count_open_alerts
 from core.llm_client import get_provider_name
+from core.settings import demo_mode
 
 DISCLAIMER = (
     "ClinicQ supports clinic staff and does not diagnose. "
@@ -68,10 +70,17 @@ h1, h2, h3, .cq-hero h1 { font-family: 'Poppins', sans-serif !important; }
     #f4f6fb;
 }
 .block-container { padding-top: 2.2rem; max-width: 1200px; }
+/* Tablets (reception and consulting-room tablets): narrower sidebar, more room for the work */
+@media (max-width: 1100px) {
+  section[data-testid="stSidebar"] { width: 220px !important; min-width: 220px !important; }
+  .block-container { padding-left: 1.2rem !important; padding-right: 1.2rem !important; padding-top: 1.4rem; }
+}
 
 /* Sidebar */
 [data-testid="stSidebar"] { background: linear-gradient(180deg,#0f766e 0%,#1e3a8a 100%); }
 [data-testid="stSidebar"] * { color: #f1f5f9 !important; }
+[data-testid="stSidebar"] .cq-demo { background: rgba(251,191,36,.25); border: 1px solid #fbbf24; border-radius: 10px;
+  padding: 6px 10px; font-weight: 600; font-size: .85rem; margin: 4px 0; }
 [data-testid="stSidebar"] [data-testid="stExpander"] { background: rgba(255,255,255,.08); border: none; }
 [data-testid="stSidebar"] [data-testid="stBaseButton-secondary"] {
   background: rgba(255,255,255,.14) !important; border: 1px solid rgba(255,255,255,.45) !important; }
@@ -216,6 +225,9 @@ def page_setup(title: str, icon: str = "🏥") -> None:
     )
     if provider == "mock":
         st.sidebar.caption("Mock mode: offline keyword logic, no API key needed.")
+    if demo_mode():
+        st.sidebar.markdown("<div class='cq-demo'>🎬 Demo mode – fictional patients only</div>",
+                            unsafe_allow_html=True)
     open_alerts = count_open_alerts()
     if open_alerts:
         st.sidebar.markdown(f"<span class='cq-chip cq-overdue'>🚨 {open_alerts} open alert(s)</span>",
@@ -261,6 +273,18 @@ def urgency_badge(urgency: str) -> str:
     """HTML for a coloured urgency pill."""
     style = URGENCY_STYLE[urgency]
     return f"<span class='cq-pill' style='background:{style['bg']};color:{style['fg']}'>{urgency}</span>"
+
+
+_MARKDOWN_SPECIAL = re.compile(r"([\\`*_{}\[\]()<>#+\-.!|~$:])")
+
+
+def md(text) -> str:
+    """Make patient- or AI-supplied text safe to put inside st.markdown.
+
+    Escapes Markdown so typed text can never turn into a link, an image (which
+    would make staff browsers load an outside web address) or formatting.
+    """
+    return _MARKDOWN_SPECIAL.sub(r"\\\1", str(text if text is not None else ""))
 
 
 def chip(text: str, colour: str = "slate", extra_class: str = "") -> str:

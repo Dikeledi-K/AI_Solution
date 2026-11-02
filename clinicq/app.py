@@ -14,7 +14,9 @@ pages = [
     st.Page("views/2_Staff_Dashboard.py", title="Staff Dashboard", icon="🩺"),
     st.Page("views/4_Alerts.py", title="Alerts", icon="🚨"),
     st.Page("views/5_Patient_Records.py", title="Patient Records", icon="🗂️"),
+    st.Page("views/8_Reports.py", title="Reports", icon="📊"),
     st.Page("views/3_Audit_Log.py", title="Audit Log", icon="📋"),
     st.Page("views/6_Staff.py", title="Staff", icon="👥"),
+    st.Page("views/7_Waiting_Room.py", title="Waiting Room screen", icon="📺", url_path="Waiting_Room"),
 ]
 st.navigation(pages).run()

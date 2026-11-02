@@ -24,6 +24,7 @@ import re
 from datetime import datetime
 
 from core import database as db
+from core import rooms
 from core.models import Urgency
 from core.stations import STATIONS, TRIAGE_STATIONS
 from core.sms_service import SMSService, called_message, near_front_message
@@ -168,8 +169,9 @@ def call_patient(patient_id: int, sms: SMSService, room: str = db.DEFAULT_ROOM,
                             "(or press 'Not here') before calling the next patient.")
     patient = db.get_patient(patient_id)
     if patient["phone"]:
-        # Privacy: the SMS names the room only – never the station (e.g. "HIV testing").
-        result = sms.send(patient["phone"], called_message(patient["queue_number"], room))
+        # Privacy: the SMS gives the neutral door number only ("Room 12") – never the
+        # station or an internal room name such as "HIV Counselling Room 1".
+        result = sms.send(patient["phone"], called_message(patient["queue_number"], rooms.door_name(room)))
         db.add_audit("SMS", patient_id=patient_id, queue_number=patient["queue_number"],
                      details=f"called SMS to {result.to_masked}: "
                              f"{'sent' if result.success else result.error}")
