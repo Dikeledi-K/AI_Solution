@@ -14,9 +14,9 @@ score), consultation, HIV testing, injection and pharmacy, while a waiting-room 
 |---|---|
 | **Stack** | Python, Streamlit, Pydantic, SQLite, Claude / Gemini / Groq (or offline mock) |
 | **Safety** | Rules can only raise urgency, the AI never sees names or ID numbers, nurses confirm every colour |
-| **Security** | Staff ID + hashed PIN only the staff member knows, roles, lockout, no staff-ID guessing, auto sign-out, append-only tamper-evident audit log, encrypted backups |
+| **Security** | Staff ID + hashed PIN only the staff member knows, least-privilege roles (the admin sees no patient data), lockout, no staff-ID guessing, auto sign-out, append-only tamper-evident audit log, encrypted backups |
 | **Runs offline** | On one computer inside the clinic with tablets on the clinic Wi-Fi ([guide](clinicq/deploy/LOCAL_NETWORK_SETUP.md)) |
-| **Tests** | 225 automated tests (`pytest`) |
+| **Tests** | 240 automated tests (`pytest`) |
 
 ## Where things are
 

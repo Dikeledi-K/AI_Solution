@@ -95,7 +95,7 @@ def test_roles_limit_stations_and_pages():
     assert auth.can_open("Doctor", "records")
     assert not auth.can_open("Nurse", "audit") and auth.can_open("Facility manager", "audit")
     assert auth.can_open("Admin", "staff_admin") and not auth.can_open("Doctor", "staff_admin")
-    assert auth.can_open("Pharmacist", "alerts")  # pages not listed are open to every role
+    assert auth.can_open("Pharmacist", "dashboard")  # pages not listed are open to every role
 
 
 def test_demo_staff_load_once():

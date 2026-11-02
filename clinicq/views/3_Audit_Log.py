@@ -1,23 +1,43 @@
 """Audit Log page: every decision, action, alert and sign-in, exportable as CSV.
 
-The main table shows readable columns (time, event, patient, colour, what happened,
-details). The raw rules / AI output used for each triage is in "Technical details".
+1. Staff activity: how many patients each staff member helped on a day, and when.
+2. The full log: readable columns (time, event, patient, colour, what happened, details).
+   The raw rules / AI output used for each triage is in "Technical details".
+
+The facility manager sees everything. The Admin (who manages the system, not patients)
+sees the same log with patient names and clinical details hidden.
 """
 
-from datetime import datetime
+import csv
+import io
+from datetime import date, datetime
 
 import pandas as pd
 import streamlit as st
 
 from core import database as db
+from core.auth import can_see_patient_data, staff_label
 from core.auth_ui import require_staff
-from core.ui import URGENCY_STYLE, hero, page_setup, tile, tiles
+from core.reports import staff_activity
+from core.ui import URGENCY_STYLE, hero, page_setup, section, tile, tiles
 
 page_setup("Audit Log", "📋")
-require_staff("audit")
+account = require_staff("audit")
 hero("Audit Log", "Every decision, action, alert and record view – with timestamps and names", "📋", "audit")
+SEES_PATIENTS = can_see_patient_data(account["role"])
+HIDDEN = "🔒 hidden"
 
-all_rows = db.get_audit_log()
+# Patient details that the Admin must not see (they are kept in the database as they are).
+PATIENT_FIELDS = ("patient_name", "input_text", "rules_result", "ai_output", "details")
+
+
+def redact(row: dict) -> dict:
+    if SEES_PATIENTS or row["patient_id"] is None:
+        return row
+    return {**row, **{k: None for k in PATIENT_FIELDS}, "patient_name": HIDDEN}
+
+
+all_rows = [redact(r) for r in db.get_audit_log()]
 
 # Tamper check: every entry's hash includes the one before it, so an entry changed or
 # removed directly in the database file breaks the chain from that point on.
@@ -28,6 +48,64 @@ if chain["ok"]:
 else:
     st.error(f"⚠️ Audit log integrity check FAILED at entry {chain['first_bad_id']}. An entry was changed or "
              "removed outside ClinicQ. Report this to the facility manager and information officer.")
+if not SEES_PATIENTS:
+    st.info("🔒 You are viewing as Admin: patient names and clinical details are hidden. Staff, times and "
+            "actions are shown.")
+
+# ---------------------------------------------------------------------------
+# 1. Staff activity – who helped how many patients, and when
+# ---------------------------------------------------------------------------
+section("👩‍⚕️ Staff activity", "how many patients each staff member helped, and when")
+day = st.date_input("Day", value=date.today(), max_value=date.today(), format="DD/MM/YYYY", key="activity_day")
+activity = staff_activity(day)
+if not activity:
+    st.info("No staff activity with patients on this day.")
+else:
+    tiles([
+        tile("Staff on duty", len(activity), "👥", "blue"),
+        tile("Patient contacts", sum(a["patients"] for a in activity), "🤝", "teal"),
+        tile("Busiest", f"{activity[0]['patients']}", "🏅", "violet"),
+    ])
+    st.caption(f"🏅 Busiest: {activity[0]['staff']} ({activity[0]['role']}). "
+               "A patient seen by the nurse and then the doctor counts once for each of them.")
+    summary = pd.DataFrame([{
+        "Staff member": a["staff"], "Role": a["role"], "Patients helped": a["patients"],
+        "First patient": a["first"], "Last patient": a["last"],
+        "Avg min per patient": a["avg_minutes"] if a["avg_minutes"] is not None else "—",
+        "Signed in": a["signed_in"] or "—", "Signed out": a["signed_out"] or "—",
+    } for a in activity])
+    st.dataframe(summary, width="stretch", hide_index=True,
+                 column_config={"Patients helped": st.column_config.ProgressColumn(
+                     "Patients helped", format="%d", min_value=0,
+                     max_value=max(a["patients"] for a in activity))})
+    for a in activity:
+        with st.expander(f"{a['staff']} – {a['role']} – {a['patients']} patient(s), {a['first']}–{a['last']}"):
+            st.dataframe(pd.DataFrame([{
+                "No.": f"#{v['queue_number']}",
+                "Patient": (v["patient_name"] or "—") if SEES_PATIENTS else HIDDEN,
+                "From": v["from"], "To": v["to"],
+                "Minutes": v["minutes"] if v["minutes"] is not None else "—",
+                "What they did": v["did"],
+            } for v in a["visits"]]), width="stretch", hide_index=True)
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["day", "staff", "role", "queue_number", "patient", "from", "to", "minutes", "what_they_did"])
+    for a in activity:
+        for v in a["visits"]:
+            writer.writerow([day.isoformat(), a["staff"], a["role"], v["queue_number"],
+                             (v["patient_name"] or "") if SEES_PATIENTS else "", v["from"], v["to"],
+                             v["minutes"] if v["minutes"] is not None else "", v["did"]])
+
+    def log_activity_export() -> None:
+        db.add_audit("EXPORT", nurse_action=f"Staff activity {day.isoformat()} exported by {staff_label(account)}",
+                     staff=staff_label(account))
+
+    st.download_button("⬇️ Export staff activity (CSV)", data=buffer.getvalue(),
+                       file_name=f"clinicq_staff_activity_{day.isoformat()}.csv", mime="text/csv",
+                       on_click=log_activity_export)
+
+section("📋 Full audit log")
 
 # Plain-English names for the event codes.
 EVENT_NAMES = {
@@ -140,20 +218,21 @@ else:
 
 # --- Technical details: what the rules and the AI produced for each triage ------
 triage_rows = [r for r in rows if r["event_type"] == "TRIAGE"]
-with st.expander(f"🔧 Technical details – rules & AI output for each triage ({len(triage_rows)})"):
-    st.caption("The patient's own words, the red-flag rules result and the AI's structured output, "
-               "exactly as stored. Useful for checking why a colour was given.")
-    if triage_rows:
-        st.dataframe(
-            pd.DataFrame([{
-                "Time": r["timestamp"].replace("T", " "),
-                "No.": f"#{r['queue_number']}",
-                "Patient": r.get("patient_name") or "—",
-                "Patient's words": r["input_text"] or "—",
-                "Rules result": r["rules_result"] or "—",
-                "AI output": r["ai_output"] or "—",
-            } for r in triage_rows]),
-            width="stretch", hide_index=True,
-        )
-    else:
-        st.caption("No triage entries in the current selection.")
+if SEES_PATIENTS:  # the Admin does not see patients' words or the AI output
+    with st.expander(f"🔧 Technical details – rules & AI output for each triage ({len(triage_rows)})"):
+        st.caption("The patient's own words, the red-flag rules result and the AI's structured output, "
+                   "exactly as stored. Useful for checking why a colour was given.")
+        if triage_rows:
+            st.dataframe(
+                pd.DataFrame([{
+                    "Time": r["timestamp"].replace("T", " "),
+                    "No.": f"#{r['queue_number']}",
+                    "Patient": r.get("patient_name") or "—",
+                    "Patient's words": r["input_text"] or "—",
+                    "Rules result": r["rules_result"] or "—",
+                    "AI output": r["ai_output"] or "—",
+                } for r in triage_rows]),
+                width="stretch", hide_index=True,
+            )
+        else:
+            st.caption("No triage entries in the current selection.")

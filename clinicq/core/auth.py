@@ -38,7 +38,8 @@ PBKDF2_ITERATIONS = 200_000
 
 ALL_STATIONS = list(STATIONS)
 
-# Which stations each role may sign in to.
+# Which stations each role may sign in to. Only clinical staff work at stations: the
+# Admin manages the SYSTEM (staff accounts, rooms) and does no clinical work.
 ROLES = {
     "Nurse": ["VITALS", "CLINICIAN", "INJECTION", "HIV_TEST"],
     "Doctor": ["CLINICIAN", "VITALS", "INJECTION"],
@@ -47,17 +48,33 @@ ROLES = {
     "Ambulance coordinator": [],
     "Facility manager": [],
     "Registration clerk": [],   # registers patients at reception (Patient Intake)
-    "Admin": ALL_STATIONS,
+    "Admin": [],                # staff accounts, rooms, security – no patients
 }
 
 # Which pages each role may open (pages not listed here are open to every signed-in role).
 PAGE_ROLES = {
-    "intake": {"Registration clerk", "Nurse", "Doctor", "Facility manager", "Admin"},
-    "records": {"Nurse", "Doctor", "Facility manager", "Admin"},
-    "export": {"Facility manager", "Admin"},      # bulk CSV export of patient records
-    "audit": {"Facility manager", "Admin"},
-    "reports": {"Facility manager", "Admin"},
+    "intake": {"Registration clerk", "Nurse", "Doctor", "Facility manager"},
+    "records": {"Nurse", "Doctor", "Facility manager"},
+    "export": {"Facility manager"},               # bulk CSV export of patient records
+    "alerts": {"Nurse", "Doctor", "Ambulance coordinator", "Facility manager"},
+    "audit": {"Facility manager", "Admin"},       # Admin sees it WITHOUT patient details
+    "reports": {"Facility manager", "Admin"},     # numbers only, no patient names
     "staff_admin": {"Admin"},
+}
+
+# Roles that may see patients' names and health details. The Admin may open the Audit
+# Log (to watch sign-ins and security) but sees it with patient details hidden.
+PATIENT_DATA_ROLES = {"Registration clerk", "Nurse", "Doctor", "Pharmacist", "HIV counsellor",
+                      "Ambulance coordinator", "Facility manager"}
+
+# Who may ACT on each kind of alert (everyone on the Alerts page can see them).
+ALERT_ROLES = {
+    "AMBULANCE": {"Ambulance coordinator", "Facility manager"},      # book the ambulance
+    "HOSPITAL": {"Ambulance coordinator", "Facility manager"},       # confirm the hospital handover
+    "DEATH_MANAGER": {"Facility manager"},
+    "DEATH_CERTIFY": {"Doctor"},                                     # only a doctor may certify a death
+    "NOK_CONTACT": {"Facility manager", "Nurse", "Doctor"},          # inform next of kin in person / by phone
+    "SAPS": {"Facility manager"},                                    # report to the police
 }
 
 # Who may SEE an HIV test result (highly sensitive – "need to know" only).
@@ -314,7 +331,8 @@ def authenticate(staff_id: str, pin: str, now: Optional[datetime] = None) -> dic
         _count_failure(staff_id, record["failed_attempts"], now, table="staff" if real else "throttle")
 
     _set(staff_id, failed_attempts=0, locked_until=None, last_login=now.isoformat(timespec="seconds"))
-    db.add_audit("STAFF_LOGIN", nurse_action=f"{staff['full_name']} ({staff_id}, {staff['role']}) signed in")
+    db.add_audit("STAFF_LOGIN", nurse_action=f"{staff['full_name']} ({staff_id}, {staff['role']}) signed in",
+                 staff=staff_label(staff))
     return {k: v for k, v in staff.items() if k != "pin_hash"}
 
 
@@ -325,6 +343,14 @@ def allowed_stations(role: str) -> list[str]:
 def can_open(role: str, page: str) -> bool:
     allowed = PAGE_ROLES.get(page)
     return allowed is None or role in allowed
+
+
+def can_handle_alert(role: str, alert_type: str) -> bool:
+    return role in ALERT_ROLES.get(alert_type, {"Facility manager"})
+
+
+def can_see_patient_data(role: str) -> bool:
+    return role in PATIENT_DATA_ROLES
 
 
 def can_see_hiv_result(role: str) -> bool:

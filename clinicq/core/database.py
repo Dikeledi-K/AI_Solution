@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS audit_log (
     final_urgency   TEXT,
     nurse_action    TEXT,
     details         TEXT,
+    staff           TEXT,            -- who did it, e.g. "Sr Dlamini (N1001)" (staff activity report)
     prev_hash       TEXT,            -- row_hash of the entry before this one
     row_hash        TEXT             -- SHA-256 of this entry + prev_hash (tamper evidence)
 );
@@ -179,10 +180,14 @@ MIGRATIONS = {
 GENESIS_HASH = "0" * 64
 HASHED_FIELDS = ["timestamp", "event_type", "patient_id", "queue_number", "patient_name", "input_text",
                  "rules_result", "ai_output", "final_urgency", "nurse_action", "details"]
+# Added later: hashed only when filled in, so entries written before it existed still verify.
+OPTIONAL_HASHED_FIELDS = ["staff"]
 
 
 def audit_hash(entry: dict, prev_hash: str) -> str:
-    content = json.dumps({k: entry.get(k) for k in HASHED_FIELDS}, sort_keys=True, ensure_ascii=False)
+    fields = {k: entry.get(k) for k in HASHED_FIELDS}
+    fields.update({k: entry[k] for k in OPTIONAL_HASHED_FIELDS if entry.get(k) is not None})
+    content = json.dumps(fields, sort_keys=True, ensure_ascii=False)
     return hashlib.sha256((prev_hash + content).encode("utf-8")).hexdigest()
 
 
@@ -237,6 +242,8 @@ def _migrate_audit_log(conn) -> None:
         for event, action in DEFAULT_ACTIONS.items():
             conn.execute("UPDATE audit_log SET nurse_action = ? WHERE event_type = ? AND nurse_action IS NULL",
                          (action, event))
+    if "staff" not in columns:
+        conn.execute("ALTER TABLE audit_log ADD COLUMN staff TEXT")
     if "row_hash" not in columns:
         # An older database may already have the triggers from a previous run of this
         # version; drop them just for this one-time back-fill.
@@ -347,6 +354,7 @@ def add_patient(
         ai_output=llm.model_dump_json() if llm else f"AI FAILED – fallback used. {triage.llm_error}",
         final_urgency=triage.final_urgency.value,
         nurse_action=f"Registered by {registered_by}" if registered_by else None,
+        staff=registered_by,
         details=f"decided_by={triage.decided_by}; provider={triage.llm_provider}; "
                 f"attempts={triage.llm_attempts}; arrival={arrival_time}"
                 f"{' (entered by staff)' if arrival_entered_by_staff else ''}; "
@@ -452,7 +460,7 @@ def set_nurse_urgency(patient_id: int, urgency: Urgency, reason: Optional[str], 
         final_urgency=urgency.value,
         nurse_action=(f"Override {patient['final_urgency']} -> {urgency.value}{by}" if override
                       else f"Confirmed {urgency.value}{by}"),
-        details=reason,
+        details=reason, staff=staff,
     )
 
 
@@ -479,7 +487,7 @@ def call_to_room(patient_id: int, room: str, staff: Optional[str] = None) -> boo
         patient = get_patient(patient_id)
         by = f" by {staff}" if staff else ""
         add_audit("STATUS", patient_id=patient_id, queue_number=patient["queue_number"],
-                  nurse_action=f"Called to {room} ({patient['station']}){by}")
+                  nurse_action=f"Called to {room} ({patient['station']}){by}", staff=staff)
     return called
 
 
@@ -515,7 +523,7 @@ def rooms_used_today() -> list[str]:
     return [row[0] for row in rows]
 
 
-def return_to_queue(patient_id: int) -> None:
+def return_to_queue(patient_id: int, staff: Optional[str] = None) -> None:
     """Patient did not come when called: put them back in the same station's queue.
 
     Their original arrival time is kept, so they do not lose their place.
@@ -528,7 +536,8 @@ def return_to_queue(patient_id: int) -> None:
             (patient_id,),
         )
     add_audit("STATUS", patient_id=patient_id, queue_number=patient["queue_number"],
-              nurse_action="Not here when called – returned to waiting queue")
+              nurse_action="Not here when called – returned to waiting queue"
+                           + (f" by {staff}" if staff else ""), staff=staff)
 
 
 # ---------------------------------------------------------------------------
@@ -542,7 +551,7 @@ def move_to_station(patient_id: int, station: str, pending: list[str], staff: Op
             room=None, called_time=None, called_by=None, near_front_sms_sent=0)
     by = f" by {staff}" if staff else ""
     add_audit("STATION", patient_id=patient_id, queue_number=patient["queue_number"],
-              nurse_action=f"{patient['station']} -> {station}{by}",
+              nurse_action=f"{patient['station']} -> {station}{by}", staff=staff,
               details=(note + (f" Next stops: {', '.join(pending)}" if pending else "")).strip() or None)
 
 
@@ -555,7 +564,7 @@ def finish_visit(patient_id: int, outcome: str, details: Optional[dict] = None,
             outcome_details=json.dumps(details) if details else None)
     by = f" by {staff}" if staff else ""
     add_audit(outcome if outcome != "DISCHARGED" else "STATUS", patient_id=patient_id,
-              queue_number=patient["queue_number"], nurse_action=f"Visit ended: {outcome}{by}",
+              queue_number=patient["queue_number"], nurse_action=f"Visit ended: {outcome}{by}", staff=staff,
               details=json.dumps(details) if details else None)
 
 
@@ -567,14 +576,14 @@ def save_vitals(patient_id: int, vitals_json: str, staff: Optional[str], pregnan
     _update(patient_id, **fields)
     patient = get_patient(patient_id)
     add_audit("VITALS", patient_id=patient_id, queue_number=patient["queue_number"],
-              nurse_action=f"Vitals taken by {staff or 'unknown'}", details=summary)
+              nurse_action=f"Vitals taken by {staff or 'unknown'}", details=summary, staff=staff)
 
 
 def save_clinician_notes(patient_id: int, notes: str, staff: Optional[str]) -> None:
     _update(patient_id, clinician_notes=notes, clinician_name=staff)
     patient = get_patient(patient_id)
     add_audit("CLINICIAN", patient_id=patient_id, queue_number=patient["queue_number"],
-              nurse_action=f"Assessment/prescription by {staff or 'unknown'}", details=notes)
+              nurse_action=f"Assessment/prescription by {staff or 'unknown'}", details=notes, staff=staff)
 
 
 def save_hiv_test(patient_id: int, record_json: str, staff: Optional[str]) -> None:
@@ -582,7 +591,7 @@ def save_hiv_test(patient_id: int, record_json: str, staff: Optional[str]) -> No
     _update(patient_id, hiv_test_json=record_json)
     patient = get_patient(patient_id)
     add_audit("HIV_TEST", patient_id=patient_id, queue_number=patient["queue_number"],
-              nurse_action=f"HIV test recorded by {staff or 'unknown'}",
+              nurse_action=f"HIV test recorded by {staff or 'unknown'}", staff=staff,
               details="Result recorded – restricted to clinical staff")
 
 
@@ -691,7 +700,7 @@ def close_alert(alert_id: int, staff: Optional[str], note: Optional[str]) -> Non
         conn.execute("UPDATE alerts SET status = 'DONE', handled_by = ?, handled_time = ?, "
                      "handled_note = ? WHERE id = ?", (staff, now_iso(), note, alert_id))
     add_audit("ALERT", patient_id=alert["patient_id"], queue_number=alert["queue_number"],
-              nurse_action=f"{alert['alert_type']} alert done by {staff or 'unknown'}", details=note)
+              nurse_action=f"{alert['alert_type']} alert done by {staff or 'unknown'}", details=note, staff=staff)
 
 
 def count_open_alerts() -> int:
@@ -717,7 +726,7 @@ def clear_all() -> None:
 # ---------------------------------------------------------------------------
 AUDIT_COLUMNS = ["id", "timestamp", "event_type", "patient_id", "queue_number", "patient_name",
                  "input_text", "rules_result", "ai_output", "final_urgency", "nurse_action", "details",
-                 "prev_hash", "row_hash"]
+                 "staff", "prev_hash", "row_hash"]
 
 
 def add_audit(event_type: str, **fields) -> None:

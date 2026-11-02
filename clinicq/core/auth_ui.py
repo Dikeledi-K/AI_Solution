@@ -42,7 +42,8 @@ def sign_out(reason: Optional[str] = None) -> None:
     if staff:
         rooms.release_room(staff["staff_id"])  # free their room for colleagues
         auth.db.add_audit("STAFF_LOGIN", nurse_action=f"{auth.staff_label(staff)} signed out"
-                                                      + (f" ({reason})" if reason else ""))
+                                                      + (f" ({reason})" if reason else ""),
+                          staff=auth.staff_label(staff))
     for key in _SESSION_KEYS:
         st.session_state.pop(key, None)
     if reason:

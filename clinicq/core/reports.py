@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import date, datetime
 from statistics import median
 from typing import Optional
@@ -93,3 +94,92 @@ def daily_report(day: Optional[date] = None) -> dict:
         "ai_failed": ai_failed,
         "languages": dict(sorted(languages.items(), key=lambda kv: -kv[1]["patients"])),
     }
+
+
+# ---------------------------------------------------------------------------
+# Staff activity: how many patients each staff member helped, and when
+# ---------------------------------------------------------------------------
+# Audit events that mean "this staff member did something for this patient".
+ASSIST_EVENTS = {
+    "TRIAGE": "Registered", "NURSE_CONFIRM": "Confirmed colour", "NURSE_OVERRIDE": "Changed colour",
+    "VITALS": "Vitals", "CLINICIAN": "Assessment & prescription", "HIV_TEST": "HIV test",
+    "STATION": "Sent on", "STATUS": None, "REFERRED": "Referred to hospital", "DECEASED": "Death recorded",
+    "ALERT": "Alert task",
+}
+_STAFF_ID = re.compile(r"\(([A-Z0-9]{3,12})\)\s*$")
+
+
+def _action(entry: dict) -> str:
+    name = ASSIST_EVENTS[entry["event_type"]]
+    if name:
+        return name
+    text = entry["nurse_action"] or ""
+    if text.startswith("Called to"):
+        return "Called"
+    if text.startswith("Not here"):
+        return "Not here"
+    if text.startswith("Visit ended"):
+        return "Sent home" if "DISCHARGED" in text else "Visit ended"
+    return "Status"
+
+
+def staff_activity(day: Optional[date] = None) -> list[dict]:
+    """One row per staff member who helped patients on `day`, busiest first.
+
+    Each row: staff, staff_id, role, patients (number), events, first, last (HH:MM),
+    signed_in, signed_out (first sign-in / last sign-out that day), avg_minutes per patient,
+    and visits: one line per patient with what they did and from when to when.
+    Time with a patient = from the first to the last thing this staff member did for them
+    (e.g. called -> sent on); a single action (e.g. registration) has no duration.
+    """
+    from core import auth  # local import: auth imports database too
+
+    iso = (day or date.today()).isoformat()
+    entries = [e for e in db.get_audit_log() if e["timestamp"].startswith(iso) and e.get("staff")]
+    people: dict[str, dict] = {}
+    for e in sorted(entries, key=lambda e: e["id"]):
+        who = e["staff"]
+        person = people.setdefault(who, {"staff": who, "visits": {}, "events": 0,
+                                          "signed_in": None, "signed_out": None})
+        if e["event_type"] == "STAFF_LOGIN":
+            text = e["nurse_action"] or ""
+            if text.endswith("signed in") and person["signed_in"] is None:
+                person["signed_in"] = e["timestamp"][11:16]
+            elif "signed out" in text:
+                person["signed_out"] = e["timestamp"][11:16]
+            continue
+        if e["event_type"] not in ASSIST_EVENTS or e["patient_id"] is None:
+            continue
+        person["events"] += 1
+        visit = person["visits"].setdefault(e["patient_id"], {
+            "patient_id": e["patient_id"], "queue_number": e["queue_number"],
+            "patient_name": e.get("patient_name"), "start": e["timestamp"], "end": e["timestamp"], "actions": []})
+        visit["end"] = e["timestamp"]
+        action = _action(e)
+        if action not in visit["actions"]:
+            visit["actions"].append(action)
+
+    rows = []
+    for who, person in people.items():
+        match = _STAFF_ID.search(who)
+        if not person["visits"] or not match:  # skip e.g. the demo loader, which is not a person
+            continue
+        account = auth.get_staff(match.group(1)) if match else None
+        visits = []
+        for v in person["visits"].values():
+            minutes = _minutes(v["start"], v["end"])
+            visits.append({"queue_number": v["queue_number"], "patient_id": v["patient_id"],
+                           "patient_name": v["patient_name"], "from": v["start"][11:16], "to": v["end"][11:16],
+                           "minutes": minutes if v["start"] != v["end"] else None,
+                           "did": ", ".join(v["actions"])})
+        timed = [v["minutes"] for v in visits if v["minutes"] is not None]
+        rows.append({
+            "staff": who, "staff_id": match.group(1),
+            "role": account["role"] if account else "—",
+            "patients": len(visits), "events": person["events"],
+            "first": min(v["from"] for v in visits), "last": max(v["to"] for v in visits),
+            "signed_in": person["signed_in"], "signed_out": person["signed_out"],
+            "avg_minutes": round(sum(timed) / len(timed)) if timed else None,
+            "visits": sorted(visits, key=lambda v: v["from"]),
+        })
+    return sorted(rows, key=lambda r: (-r["patients"], r["staff"]))

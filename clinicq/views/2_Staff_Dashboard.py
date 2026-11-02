@@ -33,7 +33,7 @@ from core.queue_manager import (TARGET_MINUTES, CallError, call_patient, effecti
 from core.sms_service import MockSMSService, get_sms_service
 from core.stations import AFTER_CLINICIAN, STATIONS, label
 from core import rooms
-from core.auth import allowed_stations, can_see_hiv_result, staff_label
+from core.auth import allowed_stations, can_open, can_see_hiv_result, staff_label
 from core.auth_ui import require_staff, session_expired
 from core.settings import demo_mode
 from core.ui import URGENCY_STYLE, chip, colour_key, hero, md, page_setup, tile, tiles, urgency_badge
@@ -59,8 +59,14 @@ hero("Staff Dashboard", "Sign in securely, call one patient at a time, and send 
 account = require_staff("dashboard")
 stations_allowed = allowed_stations(account["role"])
 if not stations_allowed:
-    st.info(f"Your role ({account['role']}) does not work at a station. "
-            "Use the 🚨 Alerts page for your tasks.")
+    where = {
+        "Admin": "Admins manage staff accounts and rooms on the 👥 Staff page, and watch security on the "
+                 "📋 Audit Log. Clinical work is done by clinical staff.",
+        "Registration clerk": "Register patients on the 📝 Patient Intake page.",
+        "Facility manager": "Use 🚨 Alerts, 📊 Reports, 🗂️ Patient Records and the 📋 Audit Log.",
+        "Ambulance coordinator": "Your tasks are on the 🚨 Alerts page.",
+    }.get(account["role"], "Use the pages in the menu for your tasks.")
+    st.info(f"Your role ({account['role']}) does not work at a station. {where}")
     st.stop()
 
 shift = st.session_state.get("staff")
@@ -457,7 +463,7 @@ def render_with_me(p: dict) -> None:
             emergency_actions(p)
         if st.button("↩️ Not here – back to queue", key=f"nothere_{p['id']}",
                      help="The patient did not come. They keep their place in the queue."):
-            not_here(p["id"])
+            not_here(p["id"], MY_NAME)
             done(f"#{p['queue_number']} returned to the queue – {MY_ROOM} is free", "↩️")
 
 
@@ -504,7 +510,7 @@ def live_dashboard() -> None:
                 "teal" if s == MY_STATION else "blue") for s in STATIONS]
           + [tile("Open alerts", open_alerts, "🚨", "RED" if open_alerts else "slate"),
              tile("Overdue", stats["overdue"], "⏰", "pink")])
-    if open_alerts:
+    if open_alerts and can_open(account["role"], "alerts"):
         text = (f"🚨 {open_alerts} open alert(s) – ambulance, hospital or death notifications "
                 "need attention. Open Alerts ➜")
         try:
@@ -536,7 +542,7 @@ def live_dashboard() -> None:
             st.warning(f"This patient was called to {MY_ROOM} for {label(with_me['station'])}. "
                        "Sign in to that station to continue, or press 'Not here'.")
             if st.button("↩️ Not here – back to queue", key="nothere_other"):
-                not_here(with_me["id"])
+                not_here(with_me["id"], MY_NAME)
                 st.rerun()
         else:
             render_with_me(with_me)

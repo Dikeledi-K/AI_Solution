@@ -5,6 +5,10 @@
     🏥 Notify hospital       -> coordinator confirms the hospital has the handover
     🕊️ Death recorded        -> facility manager attends
     🩺 Certify death / 📞 Inform next of kin / 👮 Report to SAPS -> follow-up tasks
+
+Only nurses, doctors, ambulance coordinators and the facility manager can open this
+page, and each kind of alert can only be completed by the right role (see
+auth.ALERT_ROLES) – for example only a doctor can mark a death as certified.
 """
 
 from datetime import datetime
@@ -14,9 +18,9 @@ import streamlit as st
 
 from core import database as db
 from core.sms_service import get_sms_service
-from core.auth import staff_label
+from core.auth import ALERT_ROLES, can_handle_alert, staff_label
 from core.auth_ui import require_staff
-from core.ui import chip, hero, page_setup, tile, tiles
+from core.ui import chip, hero, md, page_setup, tile, tiles
 from core.workflow import ALERT_TYPES, ambulance_called
 
 # Most urgent kinds first.
@@ -28,7 +32,8 @@ page_setup("Alerts", "🚨")
 hero("Alerts & referrals", "Ambulance requests, hospital notifications and death follow-ups", "🚨", "alerts")
 sms = get_sms_service()
 
-my_name = staff_label(require_staff("alerts"))
+account = require_staff("alerts")
+my_name = staff_label(account)
 
 
 def minutes_ago(iso: str) -> int:
@@ -52,6 +57,10 @@ def render_alert(a: dict) -> None:
         f"</div></div><p style='margin-top:.5rem;font-size:.97rem;color:#0f172a'>{escape(a['message'])}</p></div>",
         unsafe_allow_html=True,
     )
+    if not can_handle_alert(account["role"], a["alert_type"]):
+        who = " or ".join(sorted(ALERT_ROLES.get(a["alert_type"], {"Facility manager"})))
+        st.caption(f"🔒 Only the {who.lower()} can complete this task.")
+        return
     with st.form(f"alert_{a['id']}"):
         if a["alert_type"] == "AMBULANCE":
             c1, c2 = st.columns(2)
@@ -104,7 +113,7 @@ def alerts_section() -> None:
         for a in closed:
             st.markdown(f"**{ALERT_TYPES.get(a['alert_type'], a['alert_type'])} #{a['queue_number'] or ''}** – "
                         f"closed by {a['handled_by'] or '—'} at {a['handled_time'][11:16]}"
-                        f"{' – ' + a['handled_note'] if a['handled_note'] else ''}")
+                        f"{' – ' + md(a['handled_note']) if a['handled_note'] else ''}")
 
 
 # Check for new alerts automatically – but only while there is nothing to fill in,

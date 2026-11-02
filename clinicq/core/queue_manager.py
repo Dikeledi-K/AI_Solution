@@ -178,9 +178,9 @@ def call_patient(patient_id: int, sms: SMSService, room: str = db.DEFAULT_ROOM,
     notify_near_front(sms)
 
 
-def not_here(patient_id: int) -> None:
+def not_here(patient_id: int, staff: str | None = None) -> None:
     """Called patient did not come: free the room and put them back in the queue."""
-    db.return_to_queue(patient_id)
+    db.return_to_queue(patient_id, staff)
 
 
 def queue_stats() -> dict:

@@ -99,11 +99,48 @@ def test_registration_clerk_registers_but_cannot_see_clinical_records():
     assert auth.allowed_stations("Registration clerk") == []
 
 
-def test_only_managers_and_admins_can_bulk_export_or_see_reports():
+def test_only_the_facility_manager_can_bulk_export():
+    for role in ("Nurse", "Doctor", "Registration clerk", "Pharmacist", "Admin"):
+        assert not auth.can_open(role, "export")
+    assert auth.can_open("Facility manager", "export")
+
+
+def test_reports_are_for_managers_and_admins_only():
     for role in ("Nurse", "Doctor", "Registration clerk", "Pharmacist"):
-        assert not auth.can_open(role, "export") and not auth.can_open(role, "reports")
-    for role in ("Facility manager", "Admin"):
-        assert auth.can_open(role, "export") and auth.can_open(role, "reports")
+        assert not auth.can_open(role, "reports")
+    assert auth.can_open("Facility manager", "reports") and auth.can_open("Admin", "reports")
+
+
+# ---------------------------------------------------------------------------
+# The admin manages the system, not patients
+# ---------------------------------------------------------------------------
+def test_admin_does_no_clinical_work_and_sees_no_patient_data():
+    assert auth.allowed_stations("Admin") == []
+    for page in ("intake", "records", "export", "alerts"):
+        assert not auth.can_open("Admin", page)
+    assert auth.can_open("Admin", "staff_admin") and auth.can_open("Admin", "audit")
+    assert not auth.can_see_patient_data("Admin") and not auth.can_see_hiv_result("Admin")
+    assert auth.can_see_patient_data("Facility manager")
+
+
+def test_only_clinical_and_emergency_staff_open_alerts():
+    for role in ("Nurse", "Doctor", "Ambulance coordinator", "Facility manager"):
+        assert auth.can_open(role, "alerts")
+    for role in ("Pharmacist", "HIV counsellor", "Registration clerk", "Admin"):
+        assert not auth.can_open(role, "alerts")
+
+
+@pytest.mark.parametrize("alert_type, allowed", [
+    ("AMBULANCE", {"Ambulance coordinator", "Facility manager"}),
+    ("HOSPITAL", {"Ambulance coordinator", "Facility manager"}),
+    ("DEATH_CERTIFY", {"Doctor"}),
+    ("DEATH_MANAGER", {"Facility manager"}),
+    ("NOK_CONTACT", {"Facility manager", "Nurse", "Doctor"}),
+    ("SAPS", {"Facility manager"}),
+])
+def test_each_alert_can_only_be_completed_by_the_right_role(alert_type, allowed):
+    for role in auth.ROLES:
+        assert auth.can_handle_alert(role, alert_type) == (role in allowed), (role, alert_type)
 
 
 # ---------------------------------------------------------------------------

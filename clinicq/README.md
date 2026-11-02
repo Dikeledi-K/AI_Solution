@@ -100,27 +100,36 @@ key, so everyone reads the colours the same way.
 | Page | Who | What it is for |
 |---|---|---|
 | 🏠 **Home** | Everyone | Live clinic overview: patients waiting per station and per colour, overdue, open alerts, rooms in use. Also the **colour key**, the patient journey, what ClinicQ does, *"Which page do I use?"* and the demo controls. |
-| 📝 **Patient Intake** | Registration clerks (also nurses, doctors, manager, admin) | **Sign in** → search for the patient's folder → registration form → queue number ticket. Staff can enter an earlier arrival time. |
+| 📝 **Patient Intake** | Registration clerks (also nurses, doctors, facility manager) | **Sign in** → search for the patient's folder → registration form → queue number ticket. Staff can enter an earlier arrival time. |
 | 🩺 **Staff Dashboard** | Nurses, doctors, pharmacists, HIV counsellors | **Sign in** → choose your **station** and a **free room** → your station's queue → **Call now** → the **"With you now"** card shows the form for your station → **Done** sends the patient on. A compact **colour key** sits above the queue, with a rooms overview and a live count per station. |
-| 🚨 **Alerts** | Every signed-in role (mainly ambulance coordinator & facility manager) | Ambulance requests, hospital notifications, death follow-up tasks. A pulsing badge on every page shows open alerts. |
-| 🗂️ **Patient Records** | Nurses, doctors, facility manager, admin | Search all visits by name, ID, **folder** or queue number; full patient details and earlier visits in the folder. **CSV export: facility manager and admin only.** Every record opened is logged. |
+| 🚨 **Alerts** | Nurses, doctors, ambulance coordinators, facility manager | Ambulance requests, hospital notifications, death follow-up tasks. **Each task can only be completed by the right role** (see below). A pulsing badge on every page shows open alerts. |
+| 🗂️ **Patient Records** | Nurses, doctors, facility manager | Search all visits by name, ID, **folder** or queue number; full patient details and earlier visits in the folder. **CSV export: facility manager only.** Every record opened is logged. |
 | 📊 **Reports** | Facility manager, admin | Daily numbers only (no names): registrations, outcomes, waiting time to vitals per colour against SATS targets, AI failures, and **how often the vitals nurse changed the colour, per language** (early warning of language bias). CSV export. |
-| 📋 **Audit Log** | Facility manager, admin | Every triage decision, colour change, room, station move, alert, sign-in, folder search and record view, with time and staff name. A banner shows whether the **tamper check** passed. CSV export. |
+| 📋 **Audit Log** | Facility manager; admin (patient details hidden) | **Staff activity first: how many patients each staff member helped on a chosen day, their first and last patient, average minutes per patient, sign-in and sign-out times, and per patient what they did and from when to when** (CSV export). Then every triage decision, colour change, room, station move, alert, sign-in, folder search and record view, with time and staff name. A banner shows whether the **tamper check** passed. CSV export. |
 | 👥 **Staff** | Everyone: change own PIN. Admin: manage accounts | Add staff, reset PINs (the person must then choose their own), unlock, deactivate, free a stuck room. |
 | 📺 **Waiting Room screen** | The TV in the waiting area (no sign-in) | The queue numbers being called and their **door numbers** – never names, colours or what a room is for. Refreshes itself. |
 
 ### What each role can do
 
-| Role | Stations | Pages |
-|---|---|---|
-| Nurse | Vitals, Nurse/Doctor, Injection, HIV testing | Records, Alerts |
-| Doctor | Nurse/Doctor, Vitals, Injection | Records, Alerts |
-| Pharmacist | Pharmacy | Alerts |
-| HIV counsellor | HIV testing | Alerts |
-| Ambulance coordinator | — | Alerts |
-| Registration clerk | — | Patient Intake, Alerts |
-| Facility manager | — | Patient Intake, Records (+ export), Reports, Alerts, Audit Log |
-| Admin | All | Everything, incl. Staff management (and Reset in demo mode) |
+| Role | Stations | Pages | Is NOT allowed to |
+|---|---|---|---|
+| Registration clerk | — | Patient Intake | see clinical records or alerts, work at a station |
+| Nurse | Vitals, Nurse/Doctor, Injection, HIV testing | Intake, Records, Alerts | export records, certify a death, book an ambulance |
+| Doctor | Nurse/Doctor, Vitals, Injection | Intake, Records, Alerts | export records, book an ambulance |
+| Pharmacist | Pharmacy | – | see records, alerts or HIV results |
+| HIV counsellor | HIV testing | – | see records or alerts |
+| Ambulance coordinator | — | Alerts | see records; complete death tasks |
+| Facility manager | — | Intake, Records (+ **export**), Reports, Alerts, Audit Log | work at a station |
+| Admin | — | Staff, Reports, Audit Log (**patient details hidden**), Reset in demo mode | do any clinical work, see or export patient records, act on alerts |
+
+**Alerts – who completes what:** nurses and doctors *request* an ambulance with **Refer to hospital**; the ambulance coordinator (or the facility manager) books the ambulance and
+confirms the hospital handover; **only a doctor** can mark a death as certified; the facility manager handles the
+death follow-up and reporting to SAPS; the facility manager, nurses and doctors can confirm that next of kin were
+informed. Anyone else on the Alerts page sees the task with "🔒 Only the … can complete this task".
+
+**The Admin manages the system, not patients:** staff accounts, rooms and security. They cannot work at any
+station or open patient records, and on the Audit Log they see staff, times and actions with patient names and
+clinical details hidden.
 
 - **The role belongs to the staff account; staff cannot choose it.** After sign-in, the station list only shows the stations that role allows. A nurse is never offered 💊 Pharmacy, and a pharmacist only sees 💊 Pharmacy.
 - **Nurses may do HIV testing on purpose:** in South African clinics, professional nurses routinely do HIV testing and start ART. To limit HIV rooms to counsellors, change `ROLES` in `core/auth.py`.
@@ -159,7 +168,8 @@ key, so everyone reads the colours the same way.
 | **HIV results** | Need-to-know only: nurses, doctors and HIV counsellors. Never in the Audit Log, CSV exports or SMS. |
 | **SMS & waiting-room screen** | Queue number and **door number** only – never the station, a room name such as "HIV Counselling Room", or any health information. Next of kin are never told about a death by SMS. |
 | **One patient per room** | Enforced in the database, so two staff can never call the same patient or share a room. |
-| **Accountability** | Every action is logged with the staff member's name and ID, including who registered each visit and every folder search. |
+| **Accountability** | Every action is logged with the staff member's name and ID, including who registered each visit and every folder search. The **staff activity** report shows how many patients each person helped on a day, and when. |
+| **Least privilege** | Each role only gets what its work needs: the admin manages the system but does no clinical work and sees no patient details; each alert can only be completed by the right role. |
 | **Audit log cannot be changed** | The database refuses to change or delete audit entries (even "Reset demo" keeps them). Each entry also carries a **SHA-256 hash chain**, so a change made directly in the database file is detected and shown on the Audit Log page. |
 | **Safe exports & display** | Only the facility manager and admin can bulk-export records. Exports neutralise spreadsheet formulas (CSV injection). Text typed by patients or written by the AI is escaped, so it can never become a link or image on staff screens. Error details are never shown in the browser. |
 | **Backups** | `python -m core.backup` makes **encrypted** snapshots (unreadable without the key), keeps the last 30, verifies them (including the audit hash chain) and restores to a new file only. |
@@ -243,7 +253,7 @@ clinicq/
   data/demo_staff.json           Demo staff accounts (classroom only)
   data/sample_patients.json      10 fictional demo patients in mixed languages
   prompts/triage_system_prompt.txt
-  tests/                         225 pytest tests
+  tests/                         240 pytest tests
   deploy/                        Running ClinicQ on the clinic's own network (HTTPS, start-up, backups)
   .env.example  requirements.txt  pytest.ini  README.md  RESPONSIBLE_AI.md
 ```
@@ -393,14 +403,14 @@ Use a separate browser window (or a private window) for each staff member, so ea
 6. **Dr Mthembu (D2002)** – sees the HIV result, records ART initiation; the injection and pharmacy rooms are still ticked.
 7. **Sr Khumalo (N1003)** → *Injection Room*, then **Pharmacist Botha (P3001)** → *Pharmacy Counter 1*. Show the route on each card, and that the **pharmacist cannot see the HIV result** → patient goes home.
 8. **Emergency** – as Dr Naidoo, **Refer to hospital** another patient. Then as **Coordinator Sibiya (A5001)** on **Alerts**, enter an ambulance reference → the hospital is alerted.
-9. **Manager Mahlaba (M6001)** – **Patient Records** (HIV result shows as 🔒 Restricted), **Reports** (waiting times and nurse colour changes per language) and the **Audit Log** (every step with a name, and the green *audit log intact* check).
+9. **Manager Mahlaba (M6001)** – **Patient Records** (HIV result shows as 🔒 Restricted), **Reports** (waiting times and nurse colour changes per language) and the **Audit Log**: the **staff activity** table (patients helped per staff member and when), every step with a name, and the green *audit log intact* check. Then sign in as **ADMIN** to show the same log with patient details hidden.
 
 ## 9. Tests
 
 ```powershell
 pytest -v
 ```
-The 225 tests check, among other things, that:
+The 240 tests check, among other things, that:
 - **red-flag rules can never be downgraded by the AI** (every rules × AI combination), and invalid AI output falls back safely to YELLOW;
 - danger signs are caught in all 5 languages, and pregnancy and child rules only apply when relevant;
 - **names, ID numbers, addresses and phone numbers are never sent to the AI**;
@@ -415,6 +425,8 @@ The 225 tests check, among other things, that:
 - clear English negations ("no chest pain") do not raise the colour, while anything unclear still does;
 - SpO₂, glucose, AVPU and the adult TEWS score raise the colour, and children's weight is required;
 - the daily report counts waits and nurse colour changes per language, without names;
+- the **admin cannot work at a station, open patient records or act on alerts**, only the right role can complete each alert (e.g. only a doctor certifies a death), and pharmacists, counsellors and clerks cannot open Alerts;
+- the **staff activity report** counts the patients each staff member helped per day, with their times, and ignores record views and other days;
 - backups are unreadable without the key, complete, and never overwrite a live database;
 - only free rooms for the station are offered, two staff can never take the same room or call the same patient, and room names are kept exactly;
 - hospital referral alerts the ambulance coordinator, then the hospital; a death alerts the facility manager; **next of kin never get an SMS**;
