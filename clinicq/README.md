@@ -171,6 +171,7 @@ each one is addressed.
 
 ```mermaid
 flowchart TD
+    CLERK[🧑‍💼 Registration clerk<br/>signs in, finds folder] --> A
     A[📝 Patient Intake] -->|symptoms, age, sex only<br/>no names / IDs| B[core/triage.py]
     subgraph Triage [Triage pipeline]
         B --> C[Red-flag rules<br/>data/red_flags.json]
@@ -181,21 +182,25 @@ flowchart TD
         V -->|yes| E
         F --> E
     end
-    E --> DB[(SQLite<br/>patients · alerts · staff · rooms · audit_log)]
+    E --> DB[(SQLite<br/>patients & folders · alerts · staff · rooms<br/>append-only, hash-chained audit_log)]
 
     subgraph Staff [Staff Dashboard – sign in, station, free room]
-        S1[🩺 Vitals<br/>core/vitals.py] --> S2[👩‍⚕️ Nurse / Doctor]
+        S1[🩺 Vitals + TEWS<br/>core/vitals.py] --> S2[👩‍⚕️ Nurse / Doctor]
         S2 --> S3[🧪 HIV → 💉 Injection → 💊 Pharmacy]
         S3 --> HM[🏠 Home]
     end
     DB --> Staff
     AUTH[🔐 core/auth.py<br/>staff ID + PIN, roles] --> Staff
+    AUTH --> CLERK
     ROOMS[🚪 core/rooms.py<br/>data/rooms.json] --> Staff
     Staff -->|refer| AL[🚨 Alerts<br/>ambulance → hospital]
     Staff -->|death| AL
-    Staff --> SMS[📱 core/sms_service.py<br/>mock SMS – room only]
+    Staff --> SMS[📱 core/sms_service.py<br/>mock SMS – door number only]
+    DB --> TV[📺 Waiting Room screen<br/>queue no. + door number]
     DB --> REC[🗂️ Patient Records]
-    DB --> LOG[📋 Audit Log]
+    DB --> RPT[📊 Reports<br/>core/reports.py]
+    DB --> LOG[📋 Audit Log<br/>tamper check]
+    DB --> BAK[💾 Encrypted backups<br/>core/backup.py]
 ```
 
 ### Project structure
